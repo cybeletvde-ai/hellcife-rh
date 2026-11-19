@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Camera, Clock, ShieldCheck, UserCheck, X } from 'lucide-react';
+import { formatRecifeDateTimeBR } from '../../services/serverTime';
 import {
   AjusteEscala,
   Atestado,
@@ -52,6 +53,7 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
   config,
 }) => {
   const [mes, setMes] = useState(getCurrentMonthStr);
+  const [diaAuditoria, setDiaAuditoria] = useState<DiaEspelho | null>(null);
 
   const resumo = useMemo(
     () =>
@@ -124,6 +126,13 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
             const retA = dia.marcacoes.retorno_almoco?.hora.slice(0, 5) || '—';
             const sai = dia.marcacoes.saida?.hora.slice(0, 5) || '—';
 
+            const registrosDia = Object.values(dia.marcacoes).filter(
+              (m): m is RegistroPonto => Boolean(m)
+            );
+            const temAuditoria = registrosDia.some(
+              (m) => Boolean(m.selfieDataUrl) || Boolean(m.registradoPor)
+            );
+
             return (
               <div key={dia.data} className="py-2">
                 <div className="flex items-center justify-between gap-2">
@@ -135,9 +144,19 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className={`text-[11px] font-semibold shrink-0 ${st.cls}`}>
-                    {st.label}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {temAuditoria && (
+                      <button
+                        type="button"
+                        onClick={() => setDiaAuditoria(dia)}
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-[#DC2626] hover:text-white inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Camera className="w-3 h-3" />
+                        <span>Auditoria</span>
+                      </button>
+                    )}
+                    <span className={`text-[11px] font-semibold ${st.cls}`}>{st.label}</span>
+                  </div>
                 </div>
 
                 {dia.status !== 'anterior_admissao' && (
@@ -170,7 +189,8 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
                 <th className="py-2 px-2 font-semibold text-center">Saída</th>
                 <th className="py-2 px-2 font-semibold text-right">Trabalhadas</th>
                 <th className="py-2 px-2 font-semibold text-right">Extras</th>
-                <th className="py-2 pl-2 font-semibold text-right">Atrasos</th>
+                <th className="py-2 px-2 font-semibold text-right">Atrasos</th>
+                <th className="py-2 pl-2 font-semibold text-right">Auditoria</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -182,6 +202,11 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
                 const saiA = dia.marcacoes.saida_almoco?.hora.slice(0, 5) || '—';
                 const retA = dia.marcacoes.retorno_almoco?.hora.slice(0, 5) || '—';
                 const sai = dia.marcacoes.saida?.hora.slice(0, 5) || '—';
+                const registrosDia = Object.values(dia.marcacoes).filter(
+                  (m): m is RegistroPonto => Boolean(m)
+                );
+                const temSelfie = registrosDia.some((m) => Boolean(m.selfieDataUrl));
+                const temManual = registrosDia.some((m) => Boolean(m.registradoPor));
 
                 return (
                   <tr key={dia.data} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-900/50">
@@ -217,8 +242,24 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
                     <td className="py-2 px-2 font-mono tabular-nums text-right font-semibold text-[#DC2626]">
                       {extrasDia > 0 ? `+${formatMinutesToHHMM(extrasDia)}` : '—'}
                     </td>
-                    <td className="py-2 pl-2 font-mono tabular-nums text-right font-semibold text-amber-600">
+                    <td className="py-2 px-2 font-mono tabular-nums text-right font-semibold text-amber-600">
                       {dia.minutosAtraso > 0 ? `-${formatMinutesToHHMM(dia.minutosAtraso)}` : '—'}
+                    </td>
+                    <td className="py-2 pl-2 text-right whitespace-nowrap">
+                      {registrosDia.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setDiaAuditoria(dia)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-[#DC2626] hover:text-white text-[11px] font-semibold cursor-pointer"
+                        >
+                          {temSelfie && <Camera className="w-3 h-3" />}
+                          {temManual && <UserCheck className="w-3 h-3" />}
+                          {!temSelfie && !temManual && <ShieldCheck className="w-3 h-3" />}
+                          <span>Ver</span>
+                        </button>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -227,6 +268,86 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
           </table>
         </div>
       </section>
+
+      {/* Modal de Auditoria do Dia (Selfies, GPS, Servidor e Deslocamentos) */}
+      {diaAuditoria && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 no-print"
+          onClick={() => setDiaAuditoria(null)}
+        >
+          <div
+            className="w-full max-w-[440px] max-h-[85vh] overflow-y-auto rounded-xl bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 p-4 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold truncate">Auditoria · {diaAuditoria.labelDia}</h3>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                  {colaborador.nome}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiaAuditoria(null)}
+                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2.5">
+              {(
+                [
+                  ['entrada', 'Entrada'],
+                  ['saida_almoco', 'Saída Almoço'],
+                  ['retorno_almoco', 'Retorno Almoço'],
+                  ['saida', 'Saída'],
+                ] as const
+              ).map(([tipoKey, label]) => {
+                const reg = diaAuditoria.marcacoes[tipoKey];
+                if (!reg) return null;
+                return (
+                  <div key={reg.id} className="pt-2.5 first:pt-0 flex items-start gap-3 text-xs">
+                    {reg.selfieDataUrl && (
+                      <img
+                        src={reg.selfieDataUrl}
+                        alt={`Selfie ${label}`}
+                        className="w-16 h-16 rounded-lg object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center justify-between gap-2 font-bold">
+                        <span>{label}</span>
+                        <span className="font-mono tabular-nums">{reg.hora}</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Unidade: <strong className="text-[#111827] dark:text-zinc-200">{reg.unidade}</strong>
+                        {reg.distanciaMetros !== null ? ` · GPS ${reg.distanciaMetros}m` : ''}
+                      </div>
+                      {reg.criadoEmServidor && (
+                        <div className="text-[10px] font-mono text-zinc-500">
+                          Servidor (America/Recife): {formatRecifeDateTimeBR(reg.criadoEmServidor)}
+                        </div>
+                      )}
+                      {reg.registradoPor && (
+                        <div className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                          Registrado manualmente por: {reg.registradoPor}
+                        </div>
+                      )}
+                      {reg.justificativaDeslocamento && (
+                        <div className="text-[11px] text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 p-1.5 rounded border border-zinc-200/70 dark:border-zinc-800">
+                          {reg.justificativaDeslocamento}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

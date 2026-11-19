@@ -21,6 +21,7 @@ import {
   fetchAllCloudData,
   subscribeCloudRealtime,
 } from './services/supabaseSync';
+import { syncOfficialRecifeOffset } from './services/serverTime';
 import { LoginScreen } from './components/LoginScreen';
 import { DesktopSidebar, SidebarMenu } from './components/SidebarMenu';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -137,6 +138,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    void syncOfficialRecifeOffset(true);
     void sincronizarNuvem(true);
     let lastSyncTrigger = 0;
     const dispararSync = () => {
@@ -294,11 +296,20 @@ export default function App() {
     }
   };
 
-  const handleRegistrarPonto = async (reg: RegistroPonto): Promise<boolean> => {
-    const ok = await executarGravacao(() => cloudSync.insertPonto(reg));
-    if (!ok) return false;
-    setPontos((prev) => [...prev, reg]);
-    return true;
+  const handleRegistrarPonto = async (reg: RegistroPonto): Promise<RegistroPonto | null> => {
+    setErroBanco(null);
+    try {
+      const gravado = await cloudSync.insertPonto(reg);
+      setPontos((prev) => [...prev, gravado]);
+      return gravado;
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro desconhecido ao gravar registo de ponto no Supabase.';
+      setErroBanco(msg);
+      return null;
+    }
   };
 
   const handleAdicionarAtestado = async (novo: Atestado): Promise<boolean> => {
@@ -629,6 +640,7 @@ export default function App() {
             onSalvarAjuste={handleSalvarAjuste}
             onRemoverAjuste={handleRemoverAjuste}
             onAlternarFechamento={handleAlternarFechamento}
+            onRegistrarPonto={handleRegistrarPonto}
           />
         )}
 

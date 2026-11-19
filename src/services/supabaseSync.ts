@@ -140,6 +140,7 @@ function rowToPonto(r: Record<string, any>): RegistroPonto {
     data: String(r.data),
     hora: String(r.hora),
     timestamp: String(r.timestamp),
+    criadoEmServidor: r.criado_em_servidor ? String(r.criado_em_servidor) : undefined,
     tipo: r.tipo,
     latitude: r.latitude !== null && r.latitude !== undefined ? Number(r.latitude) : null,
     longitude: r.longitude !== null && r.longitude !== undefined ? Number(r.longitude) : null,
@@ -148,6 +149,13 @@ function rowToPonto(r: Record<string, any>): RegistroPonto {
         ? Number(r.distancia_metros)
         : null,
     localizacaoVerificada: Boolean(r.localizacao_verificada),
+    selfieDataUrl: r.selfie_data_url ? String(r.selfie_data_url) : undefined,
+    registradoPor: r.registrado_por ? String(r.registrado_por) : undefined,
+    justificativaDeslocamento: r.justificativa_deslocamento
+      ? String(r.justificativa_deslocamento)
+      : undefined,
+    origemRegistro:
+      r.origem_registro === 'manual_gestor' ? 'manual_gestor' : 'colaborador_gps',
     hashComprovante: String(r.hash_comprovante || ''),
   };
 }
@@ -166,6 +174,10 @@ function pontoToRow(p: RegistroPonto) {
     longitude: p.longitude,
     distancia_metros: p.distanciaMetros,
     localizacao_verificada: p.localizacaoVerificada,
+    selfie_data_url: p.selfieDataUrl ?? null,
+    registrado_por: p.registradoPor ?? null,
+    justificativa_deslocamento: p.justificativaDeslocamento ?? null,
+    origem_registro: p.origemRegistro ?? (p.registradoPor ? 'manual_gestor' : 'colaborador_gps'),
     hash_comprovante: p.hashComprovante,
   };
 }
@@ -641,11 +653,14 @@ export const cloudSync = {
     throwIfError(error, 'Erro ao atualizar status do colaborador');
   },
 
-  async insertPonto(reg: RegistroPonto): Promise<void> {
-    const { error } = await supabase
+  async insertPonto(reg: RegistroPonto): Promise<RegistroPonto> {
+    const { data, error } = await supabase
       .from('registros_ponto')
-      .insert(pontoToRow(reg));
+      .insert(pontoToRow(reg))
+      .select('*')
+      .single();
     throwIfError(error, 'Erro ao registrar ponto');
+    return data ? rowToPonto(data as Record<string, any>) : reg;
   },
 
   async insertAtestado(atestado: Atestado): Promise<void> {

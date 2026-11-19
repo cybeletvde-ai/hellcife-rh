@@ -1,18 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import {
   CalendarCog,
+  Camera,
   Check,
   CheckSquare,
   Download,
   FileText,
   Lock,
+  MapPin,
   PieChart,
   Receipt,
+  ShieldCheck,
   Trash2,
   Unlock,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { DemonstrativoHoleriteCard } from '../DemonstrativoHoleriteCard';
+import { sha256Hex } from '../../services/storage';
+import { formatRecifeDateTimeBR } from '../../services/serverTime';
 import {
   AjusteEscala,
   Atestado,
@@ -23,7 +29,10 @@ import {
   JornadaTemplate,
   RegistroPonto,
   StatusAtestado,
+  TipoMarcacao,
   Unidade,
+  getDadosEmpresaUnidade,
+  temPermissaoGestao,
 } from '../../types/rh';
 import {
   calcularEspelhoMensal,
@@ -55,19 +64,32 @@ interface FechamentoViewProps extends RHCommonProps {
   onSalvarAjuste: (ajuste: AjusteEscala) => Promise<boolean>;
   onRemoverAjuste: (id: string) => Promise<boolean>;
   onAlternarFechamento: (mes: string, unidade: 'Todas' | Unidade) => Promise<boolean>;
+  onRegistrarPonto: (registro: RegistroPonto) => Promise<RegistroPonto | null>;
 }
 
+const LABELS_TIPO_PONTO: Record<TipoMarcacao, string> = {
+  entrada: 'Entrada',
+  saida_almoco: 'Saída Almoço',
+  retorno_almoco: 'Retorno Almoço',
+  saida: 'Saída',
+};
+
 export const FechamentoView: React.FC<FechamentoViewProps> = ({
+  colaboradorAtual,
   colaboradores,
   unidadeAtiva,
+  pontos,
   atestados,
   ajustes,
   fechamentos,
+  config,
   onAtualizarAtestado,
   onSalvarAjuste,
   onRemoverAjuste,
   onAlternarFechamento,
+  onRegistrarPonto,
 }) => {
+  const isGestor = temPermissaoGestao(colaboradorAtual.funcao);
   const [mes, setMes] = useState(getCurrentMonthStr);
   const [colabId, setColabId] = useState(colaboradores[0]?.id || '');
   const [dataAjuste, setDataAjuste] = useState(getTodayStr);
@@ -77,10 +99,36 @@ export const FechamentoView: React.FC<FechamentoViewProps> = ({
   const [cargaHorasCustom, setCargaHorasCustom] = useState('6');
   const [motivoAjuste, setMotivoAjuste] = useState('Feriado municipal / Ajuste de escala');
 
+  // Registo Manual / Deslocamento de Unidade (exclusivo Administradora / Diretor)
+  const [colabManualId, setColabManualId] = useState(colaboradores[0]?.id || '');
+  const [unidadeManual, setUnidadeManual] = useState<Unidade>(unidadeAtiva);
+  const [tipoManual, setTipoManual] = useState<TipoMarcacao>('entrada');
+  const [dataManual, setDataManual] = useState(getTodayStr);
+  const [horaManual, setHoraManual] = useState('09:00');
+  const [justificativaManual, setJustificativaManual] = useState('');
+  const [erroManual, setErroManual] = useState('');
+  const [sucessoManual, setSucessoManual] = useState('');
+  const [salvandoManual, setSalvandoManual] = useState(false);
+
+  // Auditoria Visual (Selfies & Deslocamentos)
+  const [filtroAuditoriaColab, setFiltroAuditoriaColab] = useState<string>('Todos');
+  const [selfieAmpliada, setSelfieAmpliada] = useState<{
+    nome: string;
+    detalhe: string;
+    src: string;
+  } | null>(null);
+
   const pendentes = atestados.filter((a) => a.status === 'Pendente');
   const isFechado = fechamentos.some(
     (f) => f.mes === mes && (f.unidade === 'Todas' || f.unidade === unidadeAtiva)
   );
+
+  const pontosAuditoria = useMemo(() => {
+    return pontos
+      .filter((p) => p.data.startsWith(mes))
+      .filter((p) => filtroAuditoriaColab === 'Todos' || p.colaboradorId === filtroAuditoriaColab)
+      .sort((a, b) => `${b.data}T${b.hora}`.localeCompare(`${a.data}T${a.hora}`));
+  }, [pontos, mes, filtroAuditoriaColab]);
 
   const handleAddAjuste = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +144,70 @@ export const FechamentoView: React.FC<FechamentoViewProps> = ({
       cargaMinCustom: tipoAjuste === 'horario_proprio' ? cargaMin : undefined,
       motivo: motivoAjuste.trim() || 'Ajuste de escala',
     });
+  };
+
+  const handleRegistrarDeslocamentoManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErroManual('');
+    setSucessoManual('');
+
+    if (!isGestor) {
+      setErroManual('Apenas Administradora e Diretor podem lançar marcações manuais.');
+      return;
+    }
+
+    const colabAlvo = colaboradores.find((c) => c.id === colabManualId);
+    if (!colabAlvo) {
+      setErroManual('Selecione um colaborador válido.');
+      return;
+    }
+    if (!dataManual || !horaManual) {
+      setErroManual('Informe a data e a hora da marcação.');
+      return;
+    }
+    const justTrim = justificativaManual.trim();
+    if (justTrim.length < 5) {
+      setErroManual('Informe uma justificativa obrigatória (mínimo 5 caracteres).');
+      return;
+    }
+
+    setSalvandoManual(true);
+    try {
+      const horaCompleta = horaManual.length === 5 ? `${horaManual}:00` : horaManual;
+      const empresaUnidade = getDadosEmpresaUnidade(config, unidadeManual);
+      const nsr = Math.floor(Date.now() / 1000) % 1000000;
+      const payload = `${nsr}|${empresaUnidade.cnpj || config.cnpj}|${colabAlvo.id}|${dataManual}|${horaCompleta}|${unidadeManual}|${tipoManual}|MANUAL:${colaboradorAtual.nome}`;
+      const hashComprovante = await sha256Hex(payload);
+
+      const novoPonto: RegistroPonto = {
+        id: `pt-manual-${Date.now()}`,
+        nsr,
+        colaboradorId: colabAlvo.id,
+        unidade: unidadeManual,
+        data: dataManual,
+        hora: horaCompleta,
+        timestamp: new Date(`${dataManual}T${horaCompleta}-03:00`).toISOString(),
+        tipo: tipoManual,
+        latitude: null,
+        longitude: null,
+        distanciaMetros: null,
+        localizacaoVerificada: true,
+        registradoPor: colaboradorAtual.nome,
+        justificativaDeslocamento: justTrim,
+        origemRegistro: 'manual_gestor',
+        hashComprovante,
+      };
+
+      const gravado = await onRegistrarPonto(novoPonto);
+      if (gravado) {
+        setJustificativaManual('');
+        setSucessoManual(
+          `Marcação registada para ${colabAlvo.nome} na unidade ${unidadeManual} (Responsável: ${colaboradorAtual.nome}).`
+        );
+      }
+    } finally {
+      setSalvandoManual(false);
+    }
   };
 
   return (
@@ -321,6 +433,295 @@ export const FechamentoView: React.FC<FechamentoViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Registo Manual / Deslocamento de Unidade (Exclusivo Administradora e Diretor) */}
+      {isGestor && (
+        <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <UserCheck className="w-4 h-4 text-[#DC2626] shrink-0" />
+              <h2 className="text-sm font-bold truncate">
+                Registo Manual / Deslocamento de Unidade
+              </h2>
+            </div>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-50 dark:bg-red-950/40 text-[#DC2626] shrink-0">
+              Gestão
+            </span>
+          </div>
+
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Exclusivo para Administradora e Diretor. Utilize quando um colaborador estiver deslocado temporariamente noutra unidade ou precisar de validação manual.
+          </p>
+
+          {erroManual && (
+            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-700 dark:text-red-300">
+              {erroManual}
+            </div>
+          )}
+
+          {sucessoManual && (
+            <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-700 dark:text-emerald-300">
+              {sucessoManual}
+            </div>
+          )}
+
+          <form onSubmit={handleRegistrarDeslocamentoManual} className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Colaborador</label>
+                <select
+                  value={colabManualId}
+                  onChange={(e) => setColabManualId(e.target.value)}
+                  className="w-full px-2.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                >
+                  {colaboradores
+                    .filter((c) => c.ativo)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} (Lotação: {c.lotacao})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-0.5">
+                    Unidade da Marcação
+                  </label>
+                  <select
+                    value={unidadeManual}
+                    onChange={(e) => setUnidadeManual(e.target.value as Unidade)}
+                    className="w-full px-2.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                  >
+                    <option value="Recife">Recife</option>
+                    <option value="Jaboatão">Jaboatão</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-0.5">Tipo de Batida</label>
+                  <select
+                    value={tipoManual}
+                    onChange={(e) => setTipoManual(e.target.value as TipoMarcacao)}
+                    className="w-full px-2.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                  >
+                    <option value="entrada">Entrada</option>
+                    <option value="saida_almoco">Saída Almoço</option>
+                    <option value="retorno_almoco">Retorno Almoço</option>
+                    <option value="saida">Saída</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Data</label>
+                <input
+                  type="date"
+                  required
+                  value={dataManual}
+                  onChange={(e) => setDataManual(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Hora</label>
+                <input
+                  type="time"
+                  required
+                  value={horaManual}
+                  onChange={(e) => setHoraManual(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
+                />
+              </div>
+              <div className="col-span-2 md:col-span-1">
+                <label className="block text-[10px] text-zinc-500 mb-0.5">
+                  Gestor Responsável (registrado_por)
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={colaboradorAtual.nome}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 font-semibold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-zinc-500 mb-0.5">
+                Justificativa Obrigatória
+              </label>
+              <textarea
+                rows={2}
+                required
+                value={justificativaManual}
+                onChange={(e) => setJustificativaManual(e.target.value)}
+                placeholder="Ex.: Deslocamento temporário da loja Recife para cobertura na loja Jaboatão..."
+                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={salvandoManual || colaboradores.length === 0}
+              className="w-full py-2 px-3 rounded-lg bg-[#DC2626] hover:bg-red-700 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+            >
+              {salvandoManual
+                ? 'GRAVANDO NO SUPABASE...'
+                : 'VALIDAR E GRAVAR MARCAÇÃO DE DESLOCAMENTO'}
+            </button>
+          </form>
+        </section>
+      )}
+
+      {/* Auditoria de Marcações: Selfies, GPS, Hora Servidor & Deslocamentos */}
+      {isGestor && (
+        <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Camera className="w-4 h-4 text-[#DC2626] shrink-0" />
+              <h2 className="text-sm font-bold truncate">
+                Auditoria de Marcações ({pontosAuditoria.length})
+              </h2>
+            </div>
+
+            <select
+              value={filtroAuditoriaColab}
+              onChange={(e) => setFiltroAuditoriaColab(e.target.value)}
+              className="text-xs px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+            >
+              <option value="Todos">Todos os colaboradores</option>
+              {colaboradores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {pontosAuditoria.length === 0 ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 py-1">
+              Nenhuma marcação registada nesta competência ({mes}).
+            </p>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 max-h-[420px] overflow-y-auto pr-1">
+              {pontosAuditoria.slice(0, 60).map((p) => {
+                const col = colaboradores.find((c) => c.id === p.colaboradorId);
+                return (
+                  <div key={p.id} className="py-2.5 flex items-start gap-2.5 text-xs">
+                    {p.selfieDataUrl ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelfieAmpliada({
+                            nome: col?.nome || 'Colaborador',
+                            detalhe: `${formatDateBR(p.data)} ${p.hora.slice(0, 5)} · ${LABELS_TIPO_PONTO[p.tipo]} · Loja ${p.unidade}`,
+                            src: p.selfieDataUrl!,
+                          })
+                        }
+                        className="w-12 h-12 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 shrink-0 cursor-pointer hover:opacity-90"
+                        title="Ampliar selfie de auditoria"
+                      >
+                        <img
+                          src={p.selfieDataUrl}
+                          alt={`Selfie ${col?.nome || ''}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shrink-0 text-zinc-400">
+                        {p.origemRegistro === 'manual_gestor' ? (
+                          <UserCheck className="w-5 h-5 text-[#DC2626]" />
+                        ) : (
+                          <Camera className="w-4 h-4" />
+                        )}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <span className="font-bold truncate">{col?.nome || 'Colaborador'}</span>
+                        <span className="font-mono tabular-nums font-semibold text-[11px]">
+                          {formatDateBR(p.data)} {p.hora.slice(0, 5)}
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] text-zinc-600 dark:text-zinc-300 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                        <span className="font-semibold text-[#DC2626]">
+                          {LABELS_TIPO_PONTO[p.tipo]}
+                        </span>
+                        <span>· Loja {p.unidade}</span>
+                        {p.origemRegistro === 'manual_gestor' ? (
+                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
+                            · Registrado por: {p.registradoPor || 'Gestão'}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                            <MapPin className="w-3 h-3" />
+                            <span>
+                              GPS {p.distanciaMetros ?? 0}m{' '}
+                              {p.localizacaoVerificada ? '(Validado)' : ''}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+
+                      {p.criadoEmServidor && (
+                        <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          <ShieldCheck className="w-3 h-3 inline mr-1 text-emerald-600" />
+                          Servidor (America/Recife): {formatRecifeDateTimeBR(p.criadoEmServidor)}
+                        </div>
+                      )}
+
+                      {p.justificativaDeslocamento && (
+                        <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded border border-zinc-200/70 dark:border-zinc-800">
+                          Justificativa: {p.justificativaDeslocamento}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Modal Selfie Ampliada (Auditoria) */}
+      {selfieAmpliada && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 no-print"
+          onClick={() => setSelfieAmpliada(null)}
+        >
+          <div
+            className="w-full max-w-[340px] rounded-xl bg-white dark:bg-[#1C1C20] p-3 border border-zinc-200 dark:border-zinc-800 shadow-2xl space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-xs font-bold truncate">{selfieAmpliada.nome}</div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                  {selfieAmpliada.detalhe}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelfieAmpliada(null)}
+                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={selfieAmpliada.src}
+              alt={selfieAmpliada.nome}
+              className="w-full aspect-square rounded-lg object-cover border border-zinc-200 dark:border-zinc-700"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

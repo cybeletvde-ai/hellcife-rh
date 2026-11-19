@@ -19,17 +19,14 @@ import {
   getDiaGradePorDataIdx,
 } from '../types/rh';
 
+import { getEstimatedRecifeClock } from '../services/serverTime';
+
 export function getTodayStr(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return getEstimatedRecifeClock().data;
 }
 
 export function getCurrentMonthStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return getEstimatedRecifeClock().data.slice(0, 7);
 }
 
 export function parseTimeToMinutes(hhmm: string): number {

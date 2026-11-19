@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.configuracoes_sistema (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. Registos de Ponto (Portaria MTP nº 671/2021)
+-- 6. Registos de Ponto (Portaria MTP nº 671/2021 + Blindagem Antifraude)
 CREATE TABLE IF NOT EXISTS public.registros_ponto (
   id TEXT PRIMARY KEY,
   nsr BIGINT NOT NULL,
@@ -98,15 +98,68 @@ CREATE TABLE IF NOT EXISTS public.registros_ponto (
   data TEXT NOT NULL,
   hora TEXT NOT NULL,
   timestamp TEXT NOT NULL,
+  criado_em_servidor TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   tipo TEXT NOT NULL CHECK (tipo IN ('entrada', 'saida_almoco', 'retorno_almoco', 'saida')),
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   distancia_metros INTEGER,
   localizacao_verificada BOOLEAN NOT NULL DEFAULT false,
+  selfie_data_url TEXT,
+  registrado_por TEXT,
+  justificativa_deslocamento TEXT,
+  origem_registro TEXT NOT NULL DEFAULT 'colaborador_gps' CHECK (origem_registro IN ('colaborador_gps', 'manual_gestor')),
   hash_comprovante TEXT NOT NULL
 );
 
+ALTER TABLE public.registros_ponto ADD COLUMN IF NOT EXISTS criado_em_servidor TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE public.registros_ponto ADD COLUMN IF NOT EXISTS selfie_data_url TEXT;
+ALTER TABLE public.registros_ponto ADD COLUMN IF NOT EXISTS registrado_por TEXT;
+ALTER TABLE public.registros_ponto ADD COLUMN IF NOT EXISTS justificativa_deslocamento TEXT;
+ALTER TABLE public.registros_ponto ADD COLUMN IF NOT EXISTS origem_registro TEXT NOT NULL DEFAULT 'colaborador_gps';
+
 CREATE INDEX IF NOT EXISTS idx_registros_ponto_colab_data ON public.registros_ponto (colaborador_id, data);
+
+-- Função RPC para leitura direta da hora oficial do servidor (America/Recife)
+CREATE OR REPLACE FUNCTION public.agora_recife()
+RETURNS JSONB
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT jsonb_build_object(
+    'iso', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'data', to_char(NOW() AT TIME ZONE 'America/Recife', 'YYYY-MM-DD'),
+    'hora', to_char(NOW() AT TIME ZONE 'America/Recife', 'HH24:MI:SS'),
+    'epoch_ms', (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION public.agora_recife() TO anon, authenticated;
+
+-- Trigger que impede manipulação do relógio do dispositivo em batidas de colaboradores
+CREATE OR REPLACE FUNCTION public.forcar_hora_servidor_ponto()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_recife TIMESTAMP;
+BEGIN
+  NEW.criado_em_servidor := NOW();
+  IF COALESCE(NEW.origem_registro, 'colaborador_gps') = 'colaborador_gps' AND NEW.registrado_por IS NULL THEN
+    v_recife := NEW.criado_em_servidor AT TIME ZONE 'America/Recife';
+    NEW.data := to_char(v_recife, 'YYYY-MM-DD');
+    NEW.hora := to_char(v_recife, 'HH24:MI:SS');
+    NEW.timestamp := to_char(NEW.criado_em_servidor AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_forcar_hora_servidor_ponto ON public.registros_ponto;
+CREATE TRIGGER trg_forcar_hora_servidor_ponto
+  BEFORE INSERT ON public.registros_ponto
+  FOR EACH ROW
+  EXECUTE FUNCTION public.forcar_hora_servidor_ponto();
 
 -- 7. Atestados e Justificativas
 CREATE TABLE IF NOT EXISTS public.atestados (

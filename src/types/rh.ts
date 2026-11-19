@@ -167,14 +167,19 @@ export interface RegistroPonto {
   nsr: number;
   colaboradorId: string;
   unidade: Unidade;
-  data: string; // YYYY-MM-DD
-  hora: string; // HH:MM:SS
+  data: string; // YYYY-MM-DD (America/Recife)
+  hora: string; // HH:MM:SS (America/Recife)
   timestamp: string; // ISO
+  criadoEmServidor?: string; // ISO timestamptz oficial gravado no servidor
   tipo: TipoMarcacao;
   latitude: number | null;
   longitude: number | null;
   distanciaMetros: number | null;
   localizacaoVerificada: boolean;
+  selfieDataUrl?: string;
+  registradoPor?: string;
+  justificativaDeslocamento?: string;
+  origemRegistro?: 'colaborador_gps' | 'manual_gestor';
   hashComprovante: string;
 }
 
