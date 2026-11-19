@@ -1,0 +1,6 @@
+{
+  "name": "HellcifeRH+",
+  "description": "Sistema de Ponto Eletrônico, Escalas, Horas Extras e Folha de Pagamento — Hellcife Tattoo Supply (Recife e Jaboatão).",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
