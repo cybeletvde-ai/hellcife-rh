@@ -101,8 +101,8 @@ export default function App() {
   const [erroBanco, setErroBanco] = useState<string | null>(null);
 
   useEffect(() => {
-    const fadeTimer = setTimeout(() => setSplashSaindo(true), 1350);
-    const hideTimer = setTimeout(() => setSplashVisivel(false), 1650);
+    const fadeTimer = setTimeout(() => setSplashSaindo(true), 1500);
+    const hideTimer = setTimeout(() => setSplashVisivel(false), 2000);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(hideTimer);
@@ -408,16 +408,17 @@ export default function App() {
     </div>
   ) : null;
 
-  if (splashVisivel) {
-    return <SplashScreen fadingOut={splashSaindo} />;
-  }
+  const splashOverlay = splashVisivel ? <SplashScreen fadingOut={splashSaindo} /> : null;
 
   if (carregandoInicial) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center px-4">
-        <BrandLogo />
-        <p className="mt-4 text-xs text-zinc-400">Conectando ao Supabase...</p>
-      </div>
+      <>
+        <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center px-4">
+          <BrandLogo />
+          <p className="mt-4 text-xs text-zinc-400">Conectando ao Supabase...</p>
+        </div>
+        {splashOverlay}
+      </>
     );
   }
 
@@ -432,6 +433,7 @@ export default function App() {
         />
         {bannerErroSupabase}
         <OfflineIndicator />
+        {splashOverlay}
       </>
     );
   }
@@ -669,6 +671,7 @@ export default function App() {
 
       {bannerErroSupabase}
       <OfflineIndicator />
+      {splashOverlay}
     </div>
   );
 }
