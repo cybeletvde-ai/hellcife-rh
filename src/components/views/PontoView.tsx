@@ -405,8 +405,8 @@ export const PontoView: React.FC<PontoViewProps> = ({
         </div>
       </section>
 
-      {/* Grade 2x2 de 4 mini-cartões compactos */}
-      <section className="grid grid-cols-2 gap-2.5">
+      {/* Grade responsiva dos 4 mini-cartões */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         <div className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
           <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1">
             <span className="text-[11px] font-semibold truncate">Horas trabalhadas</span>

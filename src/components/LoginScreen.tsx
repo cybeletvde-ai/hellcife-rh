@@ -142,13 +142,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     <div className="min-h-screen bg-[#121214] text-zinc-100 flex flex-col">
       {/* Top Bar */}
       <header className="bg-[#09090B] border-b border-zinc-800/80">
-        <div className="w-full max-w-[410px] mx-auto px-3 py-3">
+        <div className="w-full max-w-[430px] md:max-w-3xl lg:max-w-5xl mx-auto px-3 md:px-6 py-3 flex justify-center md:justify-start">
           <BrandLogo />
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-[410px] mx-auto px-3 py-4 overflow-x-hidden flex flex-col justify-center">
+      <main className="flex-1 w-full max-w-[430px] md:max-w-md mx-auto px-3 py-4 overflow-x-hidden flex flex-col justify-center">
 
         <div className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-lg border border-zinc-200/80 dark:border-zinc-800">
           {/* Segmented Mode Switch */}

@@ -446,45 +446,85 @@ export const RelatorioView: React.FC<RHCommonProps> = ({
         </div>
       </section>
 
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
+      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
         {linhas.length === 0 ? (
           <p className="text-xs text-zinc-500 dark:text-zinc-400 py-2">
             Nenhum colaborador encontrado para este filtro.
           </p>
         ) : (
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2.5">
-            {linhas.map(({ colab, resumo }) => (
-              <div key={colab.id} className="pt-2.5 first:pt-0 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold truncate">{colab.nome}</span>
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
-                    {colab.lotacao} · {resumo.diasTrabalhados}d
-                  </span>
+          <>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2.5 md:hidden">
+              {linhas.map(({ colab, resumo }) => (
+                <div key={colab.id} className="pt-2.5 first:pt-0 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold truncate">{colab.nome}</span>
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
+                      {colab.lotacao} · {resumo.diasTrabalhados}d
+                    </span>
+                  </div>
+                  <div className="mt-1 grid grid-cols-3 gap-1.5 text-[11px] bg-zinc-50 dark:bg-zinc-900 rounded-lg p-2">
+                    <div>
+                      <div className="text-zinc-500 dark:text-zinc-400">Trab. (dec)</div>
+                      <div className="font-mono tabular-nums font-bold">
+                        {formatMinutesDecimal(resumo.totalMinTrabalhados)}h (
+                        {formatMinutesToHHMM(resumo.totalMinTrabalhados)})
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-500 dark:text-zinc-400">Extras (dec)</div>
+                      <div className="font-mono tabular-nums font-bold text-[#DC2626]">
+                        {formatMinutesDecimal(resumo.totalMinExtrasGeral)}h
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-zinc-500 dark:text-zinc-400">Atrasos (dec)</div>
+                      <div className="font-mono tabular-nums font-bold text-amber-600">
+                        {formatMinutesDecimal(resumo.totalMinAtraso)}h
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 grid grid-cols-3 gap-1.5 text-[11px] bg-zinc-50 dark:bg-zinc-900 rounded-lg p-2">
-                  <div>
-                    <div className="text-zinc-500 dark:text-zinc-400">Trab. (dec)</div>
-                    <div className="font-mono tabular-nums font-bold">
-                      {formatMinutesDecimal(resumo.totalMinTrabalhados)}h (
-                      {formatMinutesToHHMM(resumo.totalMinTrabalhados)})
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500 dark:text-zinc-400">Extras (dec)</div>
-                    <div className="font-mono tabular-nums font-bold text-[#DC2626]">
-                      {formatMinutesDecimal(resumo.totalMinExtrasGeral)}h
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-500 dark:text-zinc-400">Atrasos (dec)</div>
-                    <div className="font-mono tabular-nums font-bold text-amber-600">
-                      {formatMinutesDecimal(resumo.totalMinAtraso)}h
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    <th className="py-2 pr-3 font-semibold">Colaborador</th>
+                    <th className="py-2 px-2 font-semibold">Função</th>
+                    <th className="py-2 px-2 font-semibold">Lotação</th>
+                    <th className="py-2 px-2 font-semibold text-center">Dias</th>
+                    <th className="py-2 px-2 font-semibold text-right">Trabalhadas</th>
+                    <th className="py-2 px-2 font-semibold text-right">Extras (dec)</th>
+                    <th className="py-2 pl-2 font-semibold text-right">Atrasos (dec)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {linhas.map(({ colab, resumo }) => (
+                    <tr key={colab.id} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-900/50">
+                      <td className="py-2 pr-3 font-bold">{colab.nome}</td>
+                      <td className="py-2 px-2 text-zinc-500 dark:text-zinc-400">{colab.funcao}</td>
+                      <td className="py-2 px-2">{colab.lotacao}</td>
+                      <td className="py-2 px-2 text-center font-mono tabular-nums">
+                        {resumo.diasTrabalhados}d
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold">
+                        {formatMinutesDecimal(resumo.totalMinTrabalhados)}h (
+                        {formatMinutesToHHMM(resumo.totalMinTrabalhados)})
+                      </td>
+                      <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-[#DC2626]">
+                        {formatMinutesDecimal(resumo.totalMinExtrasGeral)}h
+                      </td>
+                      <td className="py-2 pl-2 text-right font-mono tabular-nums font-bold text-amber-600">
+                        {formatMinutesDecimal(resumo.totalMinAtraso)}h
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </div>
@@ -617,11 +657,12 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
       </section>
 
       {/* Detalhamento por Colaborador */}
-      <section className="no-print bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
+      <section className="no-print bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
           Custo por Colaborador
         </h2>
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2">
+
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2 md:hidden">
           {itens.map((it) => {
             const selecionado = itemPreview?.colaborador.id === it.colaborador.id;
             return (
@@ -653,6 +694,77 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
               </div>
             );
           })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <th className="py-2 pr-3 font-semibold">Colaborador</th>
+                <th className="py-2 px-2 font-semibold text-right">Bruto</th>
+                <th className="py-2 px-2 font-semibold text-right">FGTS (8%)</th>
+                <th className="py-2 px-2 font-semibold text-right">Férias + 1/3</th>
+                <th className="py-2 px-2 font-semibold text-right">13º</th>
+                <th className="py-2 px-2 font-semibold text-right">Benefícios</th>
+                <th className="py-2 px-2 font-semibold text-right">Custo Total</th>
+                <th className="py-2 pl-2 font-semibold text-right">Holerite</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {itens.map((it) => {
+                const selecionado = itemPreview?.colaborador.id === it.colaborador.id;
+                return (
+                  <tr
+                    key={it.colaborador.id}
+                    className={
+                      selecionado
+                        ? 'bg-red-50/50 dark:bg-red-950/20'
+                        : 'hover:bg-zinc-50/70 dark:hover:bg-zinc-900/50'
+                    }
+                  >
+                    <td className="py-2 pr-3 font-bold">
+                      <div>{it.colaborador.nome}</div>
+                      <div className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
+                        {it.colaborador.funcao} · {it.colaborador.lotacao}
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums">
+                      {formatBRL(it.remuneracaoBruta)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums">
+                      {formatBRL(it.fgts8Pct)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums">
+                      {formatBRL(it.provisaoFerias1_12 + it.provisaoTercoFerias)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums">
+                      {formatBRL(it.provisaoDecimoTerceiro1_12)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums">
+                      {formatBRL(it.beneficiosExternos)}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-[#DC2626]">
+                      {formatBRL(it.custoTotalEmpresa)}
+                    </td>
+                    <td className="py-2 pl-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewColabId(it.colaborador.id)}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer ${
+                          selecionado
+                            ? 'bg-[#DC2626] text-white'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-[#DC2626] hover:text-white'
+                        }`}
+                      >
+                        <Receipt className="w-3 h-3" />
+                        <span>{selecionado ? 'Ativo' : 'Ver'}</span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </section>
 

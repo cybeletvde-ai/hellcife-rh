@@ -69,18 +69,29 @@ const SEC_SISTEMA: MenuItem[] = [
   { id: 'sys-importar', label: 'Importar dados & Notificações', icon: Bell },
 ];
 
-export const SidebarMenu: React.FC<SidebarMenuProps> = ({
-  isOpen,
-  onClose,
+interface SidebarNavContentProps {
+  activeRoute: MenuRoute;
+  onNavigate: (route: MenuRoute) => void;
+  onAfterSelect?: () => void;
+  onClose?: () => void;
+  colaborador: Colaborador;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onLogout: () => void;
+  showCloseButton: boolean;
+}
+
+const SidebarNavContent: React.FC<SidebarNavContentProps> = ({
   activeRoute,
   onNavigate,
+  onAfterSelect,
+  onClose,
   colaborador,
   darkMode,
   onToggleDarkMode,
   onLogout,
+  showCloseButton,
 }) => {
-  if (!isOpen) return null;
-
   const isGestor = temPermissaoGestao(colaborador.funcao);
 
   const renderSection = (titulo: string, items: MenuItem[]) => (
@@ -98,7 +109,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               type="button"
               onClick={() => {
                 onNavigate(item.id);
-                onClose();
+                onAfterSelect?.();
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer text-left ${
                 active
@@ -116,7 +127,110 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex no-print">
+    <>
+      {/* Header */}
+      <div className="p-3 border-b border-zinc-800 bg-[#09090B]">
+        <div
+          className={
+            showCloseButton
+              ? 'grid grid-cols-[28px_1fr_28px] items-center'
+              : 'flex items-center justify-center py-0.5'
+          }
+        >
+          {showCloseButton && <div aria-hidden="true" />}
+          <BrandLogo />
+          {showCloseButton && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer flex items-center justify-center justify-self-end"
+              aria-label="Fechar menu"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="mt-2.5 pt-2 border-t border-zinc-800/80 min-w-0">
+          <div className="text-xs font-semibold text-white truncate">{colaborador.nome}</div>
+          <div className="text-[11px] text-zinc-400 truncate">
+            {colaborador.funcao} · {colaborador.lotacao}
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Sections */}
+      <nav className="flex-1 overflow-y-auto p-2.5">
+        {renderSection('COLABORADOR', SEC_COLABORADOR)}
+        {isGestor && renderSection('RH', SEC_RH)}
+        {isGestor && renderSection('SISTEMA', SEC_SISTEMA)}
+      </nav>
+
+      {/* Footer: PWA + Dark Mode + Logout */}
+      <div className="p-3 border-t border-zinc-800 space-y-2">
+        <PWAInstallButton />
+
+        <button
+          type="button"
+          onClick={onToggleDarkMode}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-200 transition-colors cursor-pointer"
+        >
+          <span className="flex items-center gap-2">
+            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-400" />}
+            <span>Modo escuro</span>
+          </span>
+          <span className="text-[11px] text-zinc-400">{darkMode ? 'Ativo' : 'Padrão'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-red-950/50 hover:border-red-900 text-xs font-semibold text-red-400 transition-colors cursor-pointer"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sair</span>
+        </button>
+      </div>
+    </>
+  );
+};
+
+export const DesktopSidebar: React.FC<Omit<SidebarMenuProps, 'isOpen' | 'onClose'>> = ({
+  activeRoute,
+  onNavigate,
+  colaborador,
+  darkMode,
+  onToggleDarkMode,
+  onLogout,
+}) => {
+  return (
+    <aside className="hidden lg:flex lg:flex-col lg:w-[260px] lg:shrink-0 lg:sticky lg:top-0 lg:h-screen bg-[#09090B] text-zinc-100 border-r border-zinc-800 no-print">
+      <SidebarNavContent
+        activeRoute={activeRoute}
+        onNavigate={onNavigate}
+        colaborador={colaborador}
+        darkMode={darkMode}
+        onToggleDarkMode={onToggleDarkMode}
+        onLogout={onLogout}
+        showCloseButton={false}
+      />
+    </aside>
+  );
+};
+
+export const SidebarMenu: React.FC<SidebarMenuProps> = ({
+  isOpen,
+  onClose,
+  activeRoute,
+  onNavigate,
+  colaborador,
+  darkMode,
+  onToggleDarkMode,
+  onLogout,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex lg:hidden no-print">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/65 backdrop-blur-xs"
@@ -126,58 +240,17 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
       {/* Drawer */}
       <aside className="relative z-10 w-[290px] max-w-[85vw] bg-[#09090B] text-zinc-100 h-full flex flex-col border-r border-zinc-800 shadow-2xl">
-        {/* Drawer Header */}
-        <div className="p-3 border-b border-zinc-800 bg-[#09090B]">
-          <div className="grid grid-cols-[28px_1fr_28px] items-center">
-            <div aria-hidden="true" />
-            <BrandLogo />
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer flex items-center justify-center justify-self-end"
-              aria-label="Fechar menu"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="mt-2.5 pt-2 border-t border-zinc-800/80 min-w-0">
-            <div className="text-xs font-semibold text-white truncate">{colaborador.nome}</div>
-            <div className="text-[11px] text-zinc-400 truncate">{colaborador.funcao}</div>
-          </div>
-        </div>
-
-        {/* Scrollable Sections */}
-        <nav className="flex-1 overflow-y-auto p-2.5">
-          {renderSection('COLABORADOR', SEC_COLABORADOR)}
-          {isGestor && renderSection('RH', SEC_RH)}
-          {isGestor && renderSection('SISTEMA', SEC_SISTEMA)}
-        </nav>
-
-        {/* Footer: PWA + Dark Mode + Logout */}
-        <div className="p-3 border-t border-zinc-800 space-y-2">
-          <PWAInstallButton />
-
-          <button
-            type="button"
-            onClick={onToggleDarkMode}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-200 transition-colors cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-zinc-400" />}
-              <span>Modo escuro</span>
-            </span>
-            <span className="text-[11px] text-zinc-400">{darkMode ? 'Ativo' : 'Padrão'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-950 hover:bg-red-950/50 hover:border-red-900 text-xs font-semibold text-red-400 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sair</span>
-          </button>
-        </div>
+        <SidebarNavContent
+          activeRoute={activeRoute}
+          onNavigate={onNavigate}
+          onAfterSelect={onClose}
+          onClose={onClose}
+          colaborador={colaborador}
+          darkMode={darkMode}
+          onToggleDarkMode={onToggleDarkMode}
+          onLogout={onLogout}
+          showCloseButton={true}
+        />
       </aside>
     </div>
   );

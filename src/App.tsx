@@ -22,7 +22,7 @@ import {
   subscribeCloudRealtime,
 } from './services/supabaseSync';
 import { LoginScreen } from './components/LoginScreen';
-import { SidebarMenu } from './components/SidebarMenu';
+import { DesktopSidebar, SidebarMenu } from './components/SidebarMenu';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { BrandLogo } from './components/BrandLogo';
 import { SplashScreen } from './components/SplashScreen';
@@ -123,6 +123,8 @@ export default function App() {
       setConfig(snapshot.config);
       if (errorMessage) {
         setErroBanco(errorMessage);
+      } else {
+        setErroBanco(null);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao consultar dados no Supabase.';
@@ -136,16 +138,31 @@ export default function App() {
 
   useEffect(() => {
     void sincronizarNuvem(true);
+    let lastSyncTrigger = 0;
+    const dispararSync = () => {
+      const now = Date.now();
+      if (now - lastSyncTrigger < 600) return;
+      lastSyncTrigger = now;
+      void sincronizarNuvem(false);
+    };
+
     const unsub = subscribeCloudRealtime(() => {
       void sincronizarNuvem(false);
     });
-    const handleOnline = () => {
-      void sincronizarNuvem(false);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        dispararSync();
+      }
     };
-    window.addEventListener('online', handleOnline);
+
+    window.addEventListener('online', dispararSync);
+    window.addEventListener('focus', dispararSync);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       unsub();
-      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('online', dispararSync);
+      window.removeEventListener('focus', dispararSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [sincronizarNuvem]);
 
@@ -444,33 +461,56 @@ export default function App() {
     !isGestor && isRotaRestrita(activeRoute) ? 'ponto' : activeRoute;
 
   return (
-    <div className="min-h-screen bg-[#121214] text-zinc-100 flex flex-col">
-      {/* Cabeçalho Superior (#09090B) */}
-      <header className="sticky top-0 z-30 bg-[#09090B] border-b border-zinc-800/80 no-print">
-        <div className="w-full max-w-[410px] mx-auto px-3 py-2.5 grid grid-cols-[40px_1fr_40px] items-center">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="p-2 -ml-1.5 rounded-lg text-zinc-200 hover:bg-zinc-800 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
-            aria-label="Abrir menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+    <div className="min-h-screen bg-[#121214] text-zinc-100 flex flex-col lg:flex-row">
+      {/* Menu Lateral Fixo no Computador (lg+) */}
+      <DesktopSidebar
+        activeRoute={rotaSegura}
+        onNavigate={navegarParaRota}
+        colaborador={colaboradorAtual}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode((v) => !v)}
+        onLogout={handleLogout}
+      />
 
-          <button
-            type="button"
-            onClick={() => navegarParaRota('ponto')}
-            className="cursor-pointer flex items-center justify-center"
-          >
-            <BrandLogo />
-          </button>
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Cabeçalho Superior (#09090B) */}
+        <header className="sticky top-0 z-30 bg-[#09090B] border-b border-zinc-800/80 no-print">
+          <div className="w-full max-w-[430px] md:max-w-3xl lg:max-w-5xl mx-auto px-3 md:px-6 lg:px-8 py-2.5 grid grid-cols-[40px_1fr_40px] lg:flex lg:items-center lg:justify-between items-center">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="lg:hidden p-2 -ml-1.5 rounded-lg text-zinc-200 hover:bg-zinc-800 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
+              aria-label="Abrir menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-          <div aria-hidden="true" />
-        </div>
-      </header>
+            <button
+              type="button"
+              onClick={() => navegarParaRota('ponto')}
+              className="cursor-pointer flex items-center justify-center lg:hidden"
+            >
+              <BrandLogo />
+            </button>
 
-      {/* Conteúdo Principal Compacto (max-w-[410px]) */}
-      <main className="flex-1 w-full max-w-[410px] mx-auto px-3 py-3 overflow-x-hidden print-only-full">
+            <div className="hidden lg:flex items-center gap-2 text-xs text-zinc-300">
+              <span className="font-semibold text-white">{colaboradorAtual.nome}</span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-zinc-400">{colaboradorAtual.funcao}</span>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 font-medium">
+                Lotação: <strong className="text-white">{colaboradorAtual.lotacao}</strong>
+              </span>
+            </div>
+
+            <div className="lg:hidden" aria-hidden="true" />
+          </div>
+        </header>
+
+        {/* Conteúdo Principal Responsivo (Telemóvel, Tablet e Computador) */}
+        <main className="flex-1 w-full max-w-[430px] md:max-w-3xl lg:max-w-5xl mx-auto px-3 md:px-6 lg:px-8 py-3 md:py-5 overflow-x-hidden print-only-full">
         {rotaSegura === 'ponto' && (
           <PontoView
             colaborador={colaboradorAtual}
@@ -672,6 +712,7 @@ export default function App() {
       {bannerErroSupabase}
       <OfflineIndicator />
       {splashOverlay}
+      </div>
     </div>
   );
 }

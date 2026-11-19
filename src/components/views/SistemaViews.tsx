@@ -477,7 +477,7 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
                       </div>
 
                       {dia.ativo && (
-                        <div className="grid grid-cols-2 gap-1.5 mt-2">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 md:gap-2.5 mt-2">
                           <div>
                             <label className="block text-[10px] text-zinc-500 mb-0.5">
                               Entrada
@@ -559,17 +559,20 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
         )}
       </section>
 
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
+      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
           Colaboradores ({colaboradores.length})
         </h2>
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2">
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2 md:space-y-0 md:divide-y-0 md:grid md:grid-cols-2 md:gap-2.5">
           {colaboradores.map((c) => {
             const minSem = c.gradeSemanal
               ? calcularMinutosSemanaGrade(c.gradeSemanal)
               : null;
             return (
-              <div key={c.id} className="pt-2 first:pt-0 text-xs">
+              <div
+                key={c.id}
+                className="pt-2 first:pt-0 md:pt-2.5 md:p-2.5 md:rounded-lg md:border md:border-zinc-200/70 md:dark:border-zinc-800 md:bg-zinc-50/50 md:dark:bg-zinc-900/40 text-xs"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-bold truncate">

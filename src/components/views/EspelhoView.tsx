@@ -112,9 +112,9 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
         </div>
       </section>
 
-      {/* Lista diária */}
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+      {/* Lista diária (Telemóvel) + Tabela completa (Tablet/Desktop) */}
+      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800 md:hidden">
           {resumo.dias.map((dia) => {
             const st = STATUS_LABELS[dia.status];
             const extrasDia =
@@ -156,6 +156,75 @@ export const EspelhoView: React.FC<EspelhoViewProps> = ({
               </div>
             );
           })}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                <th className="py-2 pr-3 font-semibold">Data</th>
+                <th className="py-2 px-2 font-semibold">Status</th>
+                <th className="py-2 px-2 font-semibold text-center">Entrada</th>
+                <th className="py-2 px-2 font-semibold text-center">Saída Almoço</th>
+                <th className="py-2 px-2 font-semibold text-center">Ret. Almoço</th>
+                <th className="py-2 px-2 font-semibold text-center">Saída</th>
+                <th className="py-2 px-2 font-semibold text-right">Trabalhadas</th>
+                <th className="py-2 px-2 font-semibold text-right">Extras</th>
+                <th className="py-2 pl-2 font-semibold text-right">Atrasos</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {resumo.dias.map((dia) => {
+                const st = STATUS_LABELS[dia.status];
+                const extrasDia =
+                  dia.minutosExtra50 + dia.minutosExtra65 + dia.minutosExtra70 + dia.minutosExtra100;
+                const ent = dia.marcacoes.entrada?.hora.slice(0, 5) || '—';
+                const saiA = dia.marcacoes.saida_almoco?.hora.slice(0, 5) || '—';
+                const retA = dia.marcacoes.retorno_almoco?.hora.slice(0, 5) || '—';
+                const sai = dia.marcacoes.saida?.hora.slice(0, 5) || '—';
+
+                return (
+                  <tr key={dia.data} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-900/50">
+                    <td className="py-2 pr-3 font-mono tabular-nums font-semibold whitespace-nowrap">
+                      <span>{dia.labelDia}</span>
+                      {dia.nomeFeriado && (
+                        <span className="ml-1.5 font-sans text-[11px] font-normal text-sky-600 dark:text-sky-400">
+                          · {dia.nomeFeriado}
+                        </span>
+                      )}
+                    </td>
+                    <td className={`py-2 px-2 text-[11px] font-semibold whitespace-nowrap ${st.cls}`}>
+                      {st.label}
+                      {dia.toleranciaAplicada && (
+                        <span className="ml-1 text-zinc-400 font-normal">(Tol. CLT)</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-center text-zinc-600 dark:text-zinc-300">
+                      {dia.status === 'anterior_admissao' ? '—' : ent}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-center text-zinc-600 dark:text-zinc-300">
+                      {dia.status === 'anterior_admissao' ? '—' : saiA}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-center text-zinc-600 dark:text-zinc-300">
+                      {dia.status === 'anterior_admissao' ? '—' : retA}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-center text-zinc-600 dark:text-zinc-300">
+                      {dia.status === 'anterior_admissao' ? '—' : sai}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-right font-medium">
+                      {dia.minutosTrabalhados > 0 ? formatMinutesToHHMM(dia.minutosTrabalhados) : '—'}
+                    </td>
+                    <td className="py-2 px-2 font-mono tabular-nums text-right font-semibold text-[#DC2626]">
+                      {extrasDia > 0 ? `+${formatMinutesToHHMM(extrasDia)}` : '—'}
+                    </td>
+                    <td className="py-2 pl-2 font-mono tabular-nums text-right font-semibold text-amber-600">
+                      {dia.minutosAtraso > 0 ? `-${formatMinutesToHHMM(dia.minutosAtraso)}` : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
