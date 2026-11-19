@@ -1094,9 +1094,9 @@ export const ImportarNotificacoesView: React.FC<ImportarNotificacoesProps> = ({
     }
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
-      new Notification('HellcifeRH+ · Lembrete de Ponto', {
+      new Notification('HELLCIFE RH+ · Lembrete de Ponto', {
         body: 'Lembrete configurado: não esqueça de registrar seu ponto.',
-        icon: '/pwa-192x192.png',
+        icon: '/icon-192x192.png',
       });
       setNotifFeedback('Notificação de teste enviada.');
     } else {

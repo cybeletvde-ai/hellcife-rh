@@ -21,7 +21,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ fadingOut = false })
             className="w-56 max-w-[70vw] max-h-56 object-contain rounded-2xl mix-blend-lighten"
           />
         </div>
-        <div className="mt-4 text-2xl font-extrabold uppercase tracking-[0.18em] leading-none text-center text-white">
+        <div className="mt-4 text-2xl font-extrabold uppercase tracking-widest leading-none text-center text-white">
           HELLCIFE RH+
         </div>
       </div>
