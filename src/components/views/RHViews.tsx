@@ -7,10 +7,12 @@ import {
   FileText,
   Lock,
   PieChart,
+  Receipt,
   Trash2,
   Unlock,
   X,
 } from 'lucide-react';
+import { DemonstrativoHoleriteCard } from '../DemonstrativoHoleriteCard';
 import {
   AjusteEscala,
   Atestado,
@@ -500,28 +502,33 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
   config,
 }) => {
   const [mes, setMes] = useState(getCurrentMonthStr);
+  const ativos = useMemo(() => colaboradores.filter((c) => c.ativo), [colaboradores]);
+  const [previewColabId, setPreviewColabId] = useState<string>(() => ativos[0]?.id || '');
 
   const itens = useMemo(() => {
-    return colaboradores
-      .filter((c) => c.ativo)
-      .map((c) => {
-        const jornada = jornadas.find((j) => j.id === c.jornadaId) || jornadas[0];
-        const unid = c.lotacao === 'Ambas' ? unidadeAtiva : (c.lotacao as Unidade);
-        const resumo = calcularEspelhoMensal(
-          c,
-          mes,
-          jornada,
-          pontos,
-          ajustes,
-          feriados,
-          atestados,
-          config,
-          unid
-        );
-        const holerite = calcularHoleriteMensal(c, resumo, jornada, config);
-        return calcularRetribuicaoSimplesNacional(c, holerite);
-      });
-  }, [colaboradores, jornadas, unidadeAtiva, mes, pontos, ajustes, feriados, atestados, config]);
+    return ativos.map((c) => {
+      const jornada = jornadas.find((j) => j.id === c.jornadaId) || jornadas[0];
+      const unid = c.lotacao === 'Ambas' ? unidadeAtiva : (c.lotacao as Unidade);
+      const resumo = calcularEspelhoMensal(
+        c,
+        mes,
+        jornada,
+        pontos,
+        ajustes,
+        feriados,
+        atestados,
+        config,
+        unid
+      );
+      const holerite = calcularHoleriteMensal(c, resumo, jornada, config);
+      const retribuicao = calcularRetribuicaoSimplesNacional(c, holerite);
+      return {
+        ...retribuicao,
+        resumo,
+        holerite,
+      };
+    });
+  }, [ativos, jornadas, unidadeAtiva, mes, pontos, ajustes, feriados, atestados, config]);
 
   const totais = useMemo(() => {
     return itens.reduce(
@@ -539,9 +546,14 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
     );
   }, [itens]);
 
+  const itemPreview = useMemo(() => {
+    if (itens.length === 0) return null;
+    return itens.find((i) => i.colaborador.id === previewColabId) || itens[0];
+  }, [itens, previewColabId]);
+
   return (
     <div className="space-y-3">
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
+      <section className="no-print bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <PieChart className="w-4 h-4 text-[#DC2626] shrink-0" />
@@ -605,29 +617,78 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
       </section>
 
       {/* Detalhamento por Colaborador */}
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
+      <section className="no-print bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
         <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
           Custo por Colaborador
         </h2>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2">
-          {itens.map((it) => (
-            <div key={it.colaborador.id} className="pt-2 first:pt-0 text-xs">
-              <div className="flex justify-between font-bold">
-                <span className="truncate">{it.colaborador.nome}</span>
-                <span className="font-mono tabular-nums text-[#DC2626]">
-                  {formatBRL(it.custoTotalEmpresa)}
-                </span>
+          {itens.map((it) => {
+            const selecionado = itemPreview?.colaborador.id === it.colaborador.id;
+            return (
+              <div key={it.colaborador.id} className="pt-2 first:pt-0 text-xs">
+                <div className="flex items-center justify-between gap-2 font-bold">
+                  <span className="truncate">{it.colaborador.nome}</span>
+                  <span className="font-mono tabular-nums text-[#DC2626] shrink-0">
+                    {formatBRL(it.custoTotalEmpresa)}
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-x-2">
+                  <span>Bruto: {formatBRL(it.remuneracaoBruta)}</span>
+                  <span>· FGTS: {formatBRL(it.fgts8Pct)}</span>
+                  <span>· Férias+1/3: {formatBRL(it.provisaoFerias1_12 + it.provisaoTercoFerias)}</span>
+                  <span>· 13º: {formatBRL(it.provisaoDecimoTerceiro1_12)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewColabId(it.colaborador.id)}
+                  className={`mt-1.5 text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
+                    selecionado
+                      ? 'text-[#DC2626]'
+                      : 'text-zinc-600 dark:text-zinc-300 hover:text-[#DC2626]'
+                  }`}
+                >
+                  <Receipt className="w-3.5 h-3.5 shrink-0" />
+                  <span>{selecionado ? 'Holerite selecionado abaixo' : 'Pré-visualizar holerite'}</span>
+                </button>
               </div>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-x-2">
-                <span>Bruto: {formatBRL(it.remuneracaoBruta)}</span>
-                <span>· FGTS: {formatBRL(it.fgts8Pct)}</span>
-                <span>· Férias+1/3: {formatBRL(it.provisaoFerias1_12 + it.provisaoTercoFerias)}</span>
-                <span>· 13º: {formatBRL(it.provisaoDecimoTerceiro1_12)}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
+
+      {/* Pré-visualização de Holerite do Colaborador */}
+      {itemPreview && (
+        <div className="space-y-2">
+          <div className="no-print bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-[#DC2626] shrink-0" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Pré-visualização do Holerite
+              </h2>
+            </div>
+            <select
+              value={itemPreview.colaborador.id}
+              onChange={(e) => setPreviewColabId(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+            >
+              {itens.map((it) => (
+                <option key={it.colaborador.id} value={it.colaborador.id}>
+                  {it.colaborador.nome} ({it.colaborador.funcao} · {it.colaborador.lotacao})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <DemonstrativoHoleriteCard
+            colaborador={itemPreview.colaborador}
+            unidadeAtiva={unidadeAtiva}
+            mes={mes}
+            resumo={itemPreview.resumo}
+            holerite={itemPreview.holerite}
+            config={config}
+          />
+        </div>
+      )}
     </div>
   );
 };

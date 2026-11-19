@@ -291,6 +291,16 @@ export const InformacoesView: React.FC<InformacoesViewProps> = ({
             <span className="font-mono text-right">{colaborador.cpf || 'Não informado'}</span>
           </div>
           <div className="py-1.5 flex justify-between gap-2">
+            <span className="text-zinc-500 dark:text-zinc-400">Telefone</span>
+            <span className="font-mono text-right">{colaborador.telefone || 'Não informado'}</span>
+          </div>
+          <div className="py-1.5 flex justify-between gap-2">
+            <span className="text-zinc-500 dark:text-zinc-400">Endereço</span>
+            <span className="text-right max-w-[210px] break-words">
+              {colaborador.endereco || 'Não informado'}
+            </span>
+          </div>
+          <div className="py-1.5 flex justify-between gap-2">
             <span className="text-zinc-500 dark:text-zinc-400">Função</span>
             <span className="font-semibold text-right">{colaborador.funcao}</span>
           </div>

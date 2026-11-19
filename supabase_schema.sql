@@ -25,16 +25,23 @@ CREATE TABLE IF NOT EXISTS public.colaboradores (
   cpf TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL UNIQUE,
   senha TEXT NOT NULL,
+  telefone TEXT NOT NULL DEFAULT '',
+  endereco TEXT NOT NULL DEFAULT '',
   funcao TEXT NOT NULL,
   lotacao TEXT NOT NULL CHECK (lotacao IN ('Recife', 'Jaboatão', 'Ambas')),
   data_admissao TEXT NOT NULL,
   salario_base NUMERIC(12, 2) NOT NULL DEFAULT 1621.00,
-  va_diario NUMERIC(10, 2) NOT NULL DEFAULT 14.00,
-  vt_diario NUMERIC(10, 2) NOT NULL DEFAULT 13.00,
+  va_diario NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  vt_diario NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
   jornada_id TEXT NOT NULL DEFAULT 'jornada-44h',
+  grade_semanal JSONB,
   ativo BOOLEAN NOT NULL DEFAULT true,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.colaboradores ADD COLUMN IF NOT EXISTS telefone TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.colaboradores ADD COLUMN IF NOT EXISTS endereco TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.colaboradores ADD COLUMN IF NOT EXISTS grade_semanal JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_colaboradores_email ON public.colaboradores (LOWER(email));
 

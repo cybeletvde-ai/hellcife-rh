@@ -25,6 +25,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { SidebarMenu } from './components/SidebarMenu';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { BrandLogo } from './components/BrandLogo';
+import { SplashScreen } from './components/SplashScreen';
 import { PontoView } from './components/views/PontoView';
 import { EspelhoView } from './components/views/EspelhoView';
 import { EscalasView, JornadasView } from './components/views/JornadasEscalasView';
@@ -95,7 +96,18 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeRoute, setActiveRoute] = useState<MenuRoute>(() => parseRouteFromLocation());
   const [carregandoInicial, setCarregandoInicial] = useState(true);
+  const [splashVisivel, setSplashVisivel] = useState(true);
+  const [splashSaindo, setSplashSaindo] = useState(false);
   const [erroBanco, setErroBanco] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fadeTimer = setTimeout(() => setSplashSaindo(true), 1350);
+    const hideTimer = setTimeout(() => setSplashVisivel(false), 1650);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(hideTimer);
+    };
+  }, []);
 
   const sincronizarNuvem = useCallback(async (ehInicial = false) => {
     try {
@@ -396,9 +408,13 @@ export default function App() {
     </div>
   ) : null;
 
+  if (splashVisivel) {
+    return <SplashScreen fadingOut={splashSaindo} />;
+  }
+
   if (carregandoInicial) {
     return (
-      <div className="min-h-screen bg-[#121214] text-zinc-100 flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-[#09090B] text-zinc-100 flex flex-col items-center justify-center px-4">
         <BrandLogo />
         <p className="mt-4 text-xs text-zinc-400">Conectando ao Supabase...</p>
       </div>

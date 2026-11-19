@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   Bell,
   Building2,
+  Clock,
+  Copy,
   Edit3,
   MapPin,
   Plus,
@@ -14,13 +16,26 @@ import {
 import {
   Colaborador,
   ConfiguracaoEmpresa,
+  DEFAULT_GRADE_SEMANAL,
+  DiaSemanaKey,
   Feriado,
+  GradeSemanal,
+  HorarioDiaSemana,
   JornadaTemplate,
   Lotacao,
+  ORDEM_DIAS_SEMANA,
   Unidade,
+  calcularMinutosDiaGrade,
+  calcularMinutosSemanaGrade,
+  cloneGradeSemanal,
   temPermissaoGestao,
 } from '../../types/rh';
-import { formatBRL, formatDateBR, getTodayStr } from '../../utils/cltCalculations';
+import {
+  formatBRL,
+  formatDateBR,
+  formatMinutesToHHMM,
+  getTodayStr,
+} from '../../utils/cltCalculations';
 
 interface ColaboradoresCrudProps {
   colaboradores: Colaborador[];
@@ -42,14 +57,45 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [telefone, setTelefone] = useState('');
+  const [endereco, setEndereco] = useState('');
   const [funcao, setFuncao] = useState('');
   const [lotacao, setLotacao] = useState<Lotacao>('Recife');
   const [dataAdmissao, setDataAdmissao] = useState(getTodayStr);
   const [salarioBase, setSalarioBase] = useState('1621.00');
-  const [vaDiario, setVaDiario] = useState('14.00');
-  const [vtDiario, setVtDiario] = useState('13.00');
-  const [jornadaId, setJornadaId] = useState(jornadas[0]?.id || 'jornada-44h');
+  const [vaDiario, setVaDiario] = useState('');
+  const [vtDiario, setVtDiario] = useState('');
+  const [gradeSemanal, setGradeSemanal] = useState<GradeSemanal>(() =>
+    cloneGradeSemanal(DEFAULT_GRADE_SEMANAL)
+  );
+  const [replicadoMsg, setReplicadoMsg] = useState(false);
   const [erro, setErro] = useState('');
+
+  const gradeFromJornadaTemplate = (j?: JornadaTemplate): GradeSemanal => {
+    if (!j) return cloneGradeSemanal(DEFAULT_GRADE_SEMANAL);
+    const diaSegSex: HorarioDiaSemana = {
+      ativo: true,
+      entrada: j.segSexEntrada || '09:00',
+      saidaAlmoco: j.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: j.intervaloMin > 0 ? '14:00' : '',
+      saida: j.segSexSaida || '18:00',
+    };
+    return {
+      seg: { ...diaSegSex },
+      ter: { ...diaSegSex },
+      qua: { ...diaSegSex },
+      qui: { ...diaSegSex },
+      sex: { ...diaSegSex },
+      sab: {
+        ativo: j.sabadoAtivo,
+        entrada: j.sabadoEntrada || '09:00',
+        saidaAlmoco: '',
+        retornoAlmoco: '',
+        saida: j.sabadoSaida || '13:00',
+      },
+      dom: { ...DEFAULT_GRADE_SEMANAL.dom, ativo: false },
+    };
+  };
 
   const abrirNovo = () => {
     setEditandoId(null);
@@ -57,13 +103,16 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
     setCpf('');
     setEmail('');
     setSenha('');
+    setTelefone('');
+    setEndereco('');
     setFuncao('');
     setLotacao('Recife');
     setDataAdmissao(getTodayStr());
     setSalarioBase('1621.00');
-    setVaDiario('14.00');
-    setVtDiario('13.00');
-    setJornadaId(jornadas[0]?.id || 'jornada-44h');
+    setVaDiario('');
+    setVtDiario('');
+    setGradeSemanal(cloneGradeSemanal(DEFAULT_GRADE_SEMANAL));
+    setReplicadoMsg(false);
     setErro('');
     setFormAberto(true);
   };
@@ -74,23 +123,55 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
     setCpf(c.cpf);
     setEmail(c.email);
     setSenha(c.senha);
+    setTelefone(c.telefone || '');
+    setEndereco(c.endereco || '');
     setFuncao(c.funcao);
     setLotacao(c.lotacao);
     setDataAdmissao(c.dataAdmissao);
     setSalarioBase(String(c.salarioBase));
-    setVaDiario(String(c.vaDiario));
-    setVtDiario(String(c.vtDiario));
-    setJornadaId(c.jornadaId);
+    setVaDiario(c.vaDiario !== undefined && c.vaDiario !== null ? String(c.vaDiario) : '0');
+    setVtDiario(c.vtDiario !== undefined && c.vtDiario !== null ? String(c.vtDiario) : '0');
+    if (c.gradeSemanal) {
+      setGradeSemanal(cloneGradeSemanal(c.gradeSemanal));
+    } else {
+      const tpl = jornadas.find((j) => j.id === c.jornadaId) || jornadas[0];
+      setGradeSemanal(gradeFromJornadaTemplate(tpl));
+    }
+    setReplicadoMsg(false);
     setErro('');
     setFormAberto(true);
   };
 
   const handleLotacaoChange = (nova: Lotacao) => {
     setLotacao(nova);
-    if (!editandoId) {
-      setVtDiario(nova === 'Jaboatão' ? '9.00' : '13.00');
-    }
   };
+
+  const atualizarDiaGrade = (
+    diaKey: DiaSemanaKey,
+    patch: Partial<HorarioDiaSemana>
+  ) => {
+    setGradeSemanal((prev) => ({
+      ...prev,
+      [diaKey]: {
+        ...prev[diaKey],
+        ...patch,
+      },
+    }));
+  };
+
+  const replicarSegundaParaTercaSexta = () => {
+    setGradeSemanal((prev) => ({
+      ...prev,
+      ter: { ...prev.seg },
+      qua: { ...prev.seg },
+      qui: { ...prev.seg },
+      sex: { ...prev.seg },
+    }));
+    setReplicadoMsg(true);
+    setTimeout(() => setReplicadoMsg(false), 2000);
+  };
+
+  const cargaSemanalMin = calcularMinutosSemanaGrade(gradeSemanal);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,20 +185,44 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
       return;
     }
 
+    const parseBeneficio = (raw: string): number | null => {
+      const norm = raw.trim().replace(',', '.');
+      if (!norm) return 0;
+      const n = parseFloat(norm);
+      if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+      return Number(n.toFixed(2));
+    };
+
+    const vaParsed = parseBeneficio(vaDiario);
+    const vtParsed = parseBeneficio(vtDiario);
+    if (vaParsed === null || vtParsed === null) {
+      setErro('Vale-Alimentação e Vale-Transporte devem estar entre R$ 0,00 e R$ 100,00.');
+      return;
+    }
+
     const existente = colaboradores.find((c) => c.id === editandoId);
+    const horasSemanais = cargaSemanalMin / 60;
+    const jornadaDerivada =
+      horasSemanais <= 36
+        ? jornadas.find((j) => j.horasSemanais <= 36)?.id || 'jornada-36h'
+        : jornadas.find((j) => j.horasSemanais > 36)?.id || 'jornada-44h';
+
     const registro: Colaborador = {
       id: editandoId || `col-${Date.now()}`,
       nome: nome.trim(),
       cpf: cpf.trim(),
       email: emailNorm,
       senha,
+      telefone: telefone.trim(),
+      endereco: endereco.trim(),
       funcao: funcao.trim(),
       lotacao,
       dataAdmissao,
       salarioBase: parseFloat(salarioBase.replace(',', '.')) || 1621,
-      vaDiario: parseFloat(vaDiario.replace(',', '.')) || 14,
-      vtDiario: parseFloat(vtDiario.replace(',', '.')) || 0,
-      jornadaId,
+      vaDiario: vaParsed,
+      vtDiario: vtParsed,
+      jornadaId: existente?.jornadaId || jornadaDerivada,
+      gradeSemanal: cloneGradeSemanal(gradeSemanal),
       ativo: existente ? existente.ativo : true,
       criadoEm: existente?.criadoEm || new Date().toISOString(),
     };
@@ -153,61 +258,103 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
                 {erro}
               </div>
             )}
-            <input
-              type="text"
-              required
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Nome completo"
-              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
-                placeholder="CPF (000.000.000-00)"
-                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
-              />
-              <input
-                type="text"
-                required
-                value={funcao}
-                onChange={(e) => setFuncao(e.target.value)}
-                placeholder="Função / Cargo"
-                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="E-mail"
-                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
-              />
-              <input
-                type="password"
-                required
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Senha"
-                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
-              />
-            </div>
             <div>
-              <label className="block text-[10px] text-zinc-500 mb-0.5">Lotação</label>
-              <select
-                value={lotacao}
-                onChange={(e) => handleLotacaoChange(e.target.value as Lotacao)}
-                className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
-              >
-                <option value="Recife">Recife</option>
-                <option value="Jaboatão">Jaboatão</option>
-                <option value="Ambas">Ambas</option>
-              </select>
+              <label className="block text-[10px] text-zinc-500 mb-0.5">Nome completo</label>
+              <input
+                type="text"
+                required
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome completo"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+              />
             </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">CPF</label>
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(e) => setCpf(e.target.value)}
+                  placeholder="000.000.000-00"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Função / Cargo</label>
+                <input
+                  type="text"
+                  required
+                  value={funcao}
+                  onChange={(e) => setFuncao(e.target.value)}
+                  placeholder="Ex.: Vendedor, Estoque"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@empresa.com.br"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  placeholder="Senha de acesso"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Telefone</label>
+                <input
+                  type="tel"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
+                  placeholder="(81) 99999-9999"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">Lotação</label>
+                <select
+                  value={lotacao}
+                  onChange={(e) => handleLotacaoChange(e.target.value as Lotacao)}
+                  className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+                >
+                  <option value="Recife">Recife</option>
+                  <option value="Jaboatão">Jaboatão</option>
+                  <option value="Ambas">Ambas</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] text-zinc-500 mb-0.5">Endereço</label>
+              <input
+                type="text"
+                value={endereco}
+                onChange={(e) => setEndereco(e.target.value)}
+                placeholder="Rua, nº, bairro, cidade"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[10px] text-zinc-500 mb-0.5">Data de Admissão</label>
@@ -231,44 +378,168 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
                 />
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] text-zinc-500 mb-0.5">VA Diário (R$)</label>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">
+                  Vale-Alimentação diário (R$)
+                </label>
                 <input
                   type="number"
+                  min={0}
+                  max={100}
                   step="0.01"
-                  required
                   value={vaDiario}
                   onChange={(e) => setVaDiario(e.target.value)}
+                  placeholder="0,00 (opcional)"
                   className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-zinc-500 mb-0.5">VT Diário (R$)</label>
+                <label className="block text-[10px] text-zinc-500 mb-0.5">
+                  Vale-Transporte diário (R$)
+                </label>
                 <input
                   type="number"
+                  min={0}
+                  max={100}
                   step="0.01"
-                  required
                   value={vtDiario}
                   onChange={(e) => setVtDiario(e.target.value)}
+                  placeholder="0,00 (opcional)"
                   className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 font-mono"
                 />
               </div>
             </div>
-            <div>
-              <label className="block text-[10px] text-zinc-500 mb-0.5">Jornada</label>
-              <select
-                value={jornadaId}
-                onChange={(e) => setJornadaId(e.target.value)}
-                className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900"
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+              VA e VT diários são opcionais (de R$ 0,00 até R$ 100,00). Se VT for 0,00, não há desconto de 6% no holerite.
+            </p>
+
+            {/* Grade Completa de Horários (Segunda a Domingo) */}
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Clock className="w-3.5 h-3.5 text-[#DC2626] shrink-0" />
+                  <span className="font-bold text-xs truncate">Grade de Horários</span>
+                </div>
+                <span className="font-mono tabular-nums text-[11px] font-bold text-[#DC2626] shrink-0">
+                  {formatMinutesToHHMM(cargaSemanalMin)} / sem
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={replicarSegundaParaTercaSexta}
+                className="w-full py-1.5 px-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900 hover:border-[#DC2626] text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
               >
-                {jornadas.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.nome}
-                  </option>
-                ))}
-              </select>
+                <Copy className="w-3.5 h-3.5 text-[#DC2626] shrink-0" />
+                <span>
+                  {replicadoMsg
+                    ? 'Horário de Segunda replicado para Terça a Sexta!'
+                    : 'Replicar Segunda para Terça a Sexta'}
+                </span>
+              </button>
+
+              <div className="space-y-1.5">
+                {ORDEM_DIAS_SEMANA.map(({ key, label }) => {
+                  const dia = gradeSemanal[key];
+                  const cargaDiaMin = calcularMinutosDiaGrade(dia);
+
+                  return (
+                    <div
+                      key={key}
+                      className={`rounded-lg border p-2 transition-colors ${
+                        dia.ativo
+                          ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/90'
+                          : 'border-zinc-200/60 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-950/60 opacity-85'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={dia.ativo}
+                            onChange={(e) =>
+                              atualizarDiaGrade(key, { ativo: e.target.checked })
+                            }
+                            className="accent-[#DC2626] w-3.5 h-3.5 shrink-0 cursor-pointer"
+                          />
+                          <span className="font-bold text-xs truncate">{label}</span>
+                        </label>
+
+                        <span
+                          className={`text-[10px] font-mono tabular-nums font-bold shrink-0 ${
+                            dia.ativo ? 'text-[#111827] dark:text-zinc-200' : 'text-zinc-500'
+                          }`}
+                        >
+                          {dia.ativo ? `${formatMinutesToHHMM(cargaDiaMin)}/dia` : 'Folga'}
+                        </span>
+                      </div>
+
+                      {dia.ativo && (
+                        <div className="grid grid-cols-2 gap-1.5 mt-2">
+                          <div>
+                            <label className="block text-[10px] text-zinc-500 mb-0.5">
+                              Entrada
+                            </label>
+                            <input
+                              type="time"
+                              required
+                              value={dia.entrada}
+                              onChange={(e) =>
+                                atualizarDiaGrade(key, { entrada: e.target.value })
+                              }
+                              className="w-full px-1.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-[11px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-zinc-500 mb-0.5">
+                              Saída Almoço
+                            </label>
+                            <input
+                              type="time"
+                              value={dia.saidaAlmoco}
+                              onChange={(e) =>
+                                atualizarDiaGrade(key, { saidaAlmoco: e.target.value })
+                              }
+                              className="w-full px-1.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-[11px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-zinc-500 mb-0.5">
+                              Retorno Almoço
+                            </label>
+                            <input
+                              type="time"
+                              value={dia.retornoAlmoco}
+                              onChange={(e) =>
+                                atualizarDiaGrade(key, { retornoAlmoco: e.target.value })
+                              }
+                              className="w-full px-1.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-[11px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-zinc-500 mb-0.5">
+                              Saída
+                            </label>
+                            <input
+                              type="time"
+                              required
+                              value={dia.saida}
+                              onChange={(e) =>
+                                atualizarDiaGrade(key, { saida: e.target.value })
+                              }
+                              className="w-full px-1.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-[11px]"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
@@ -293,49 +564,55 @@ export const ColaboradoresCrudView: React.FC<ColaboradoresCrudProps> = ({
           Colaboradores ({colaboradores.length})
         </h2>
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800 space-y-2">
-          {colaboradores.map((c) => (
-            <div key={c.id} className="pt-2 first:pt-0 text-xs">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-bold truncate">
-                    {c.nome}{' '}
-                    {!c.ativo && <span className="text-red-600 font-semibold">(Inativo)</span>}
+          {colaboradores.map((c) => {
+            const minSem = c.gradeSemanal
+              ? calcularMinutosSemanaGrade(c.gradeSemanal)
+              : null;
+            return (
+              <div key={c.id} className="pt-2 first:pt-0 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold truncate">
+                      {c.nome}{' '}
+                      {!c.ativo && <span className="text-red-600 font-semibold">(Inativo)</span>}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                      {c.funcao} · {c.lotacao}
+                      {temPermissaoGestao(c.funcao) ? ' · Gestão' : ''}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
+                      Adm: {formatDateBR(c.dataAdmissao)} · {formatBRL(c.salarioBase)}
+                      {minSem !== null ? ` · ${formatMinutesToHHMM(minSem)}/sem` : ''}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
-                    {c.funcao} · {c.lotacao}
-                    {temPermissaoGestao(c.funcao) ? ' · Gestão' : ''}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => abrirEditar(c)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
+                      title="Editar colaborador"
+                      aria-label="Editar colaborador"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onAlternarAtivo(c.id)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
+                      title={c.ativo ? 'Desativar' : 'Ativar'}
+                      aria-label={c.ativo ? 'Desativar' : 'Ativar'}
+                    >
+                      {c.ativo ? (
+                        <UserX className="w-3.5 h-3.5 text-amber-600" />
+                      ) : (
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      )}
+                    </button>
                   </div>
-                  <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono">
-                    Adm: {formatDateBR(c.dataAdmissao)} · {formatBRL(c.salarioBase)}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => abrirEditar(c)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
-                    title="Editar colaborador"
-                    aria-label="Editar colaborador"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onAlternarAtivo(c.id)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
-                    title={c.ativo ? 'Desativar' : 'Ativar'}
-                    aria-label={c.ativo ? 'Desativar' : 'Ativar'}
-                  >
-                    {c.ativo ? (
-                      <UserX className="w-3.5 h-3.5 text-amber-600" />
-                    ) : (
-                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    )}
-                  </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>
@@ -775,14 +1052,16 @@ export const ImportarNotificacoesView: React.FC<ImportarNotificacoesProps> = ({
           cpf: cpf || '',
           email: email.toLowerCase(),
           senha: senha || '123456',
+          telefone: '',
+          endereco: '',
           funcao: funcao || '',
           lotacao: lotVal,
           dataAdmissao: dataAdm || getTodayStr(),
           salarioBase: parseFloat((sal || '1621').replace(',', '.')) || 1621,
-          vaDiario: parseFloat((va || '14').replace(',', '.')) || 14,
-          vtDiario:
-            parseFloat((vt || (lotVal === 'Jaboatão' ? '9' : '13')).replace(',', '.')) || 13,
+          vaDiario: Math.min(100, Math.max(0, parseFloat((va || '0').replace(',', '.')) || 0)),
+          vtDiario: Math.min(100, Math.max(0, parseFloat((vt || '0').replace(',', '.')) || 0)),
           jornadaId: 'jornada-44h',
+          gradeSemanal: cloneGradeSemanal(DEFAULT_GRADE_SEMANAL),
           ativo: true,
           criadoEm: new Date().toISOString(),
         });

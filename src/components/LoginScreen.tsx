@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, Lock, Mail, MapPin, UserPlus, LogIn, Briefcase, User } from 'lucide-react';
-import { Colaborador, Lotacao, Unidade } from '../types/rh';
+import { Colaborador, DEFAULT_GRADE_SEMANAL, Lotacao, Unidade, cloneGradeSemanal } from '../types/rh';
 import { getTodayStr } from '../utils/cltCalculations';
 import { PWAInstallButton } from './PWAInstallButton';
 import { BrandLogo } from './BrandLogo';
@@ -109,7 +109,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           ? defaultUnidade
           : unidadeLogin
         : lotacao;
-    const vtPadrao = lotacao === 'Jaboatão' ? 9.0 : 13.0;
 
     const novo: Colaborador = {
       id: `col-${Date.now()}`,
@@ -117,13 +116,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       cpf: '',
       email: emailNorm,
       senha,
+      telefone: '',
+      endereco: '',
       funcao: funcao.trim(),
       lotacao,
       dataAdmissao: getTodayStr(),
       salarioBase: 1621.0,
-      vaDiario: 14.0,
-      vtDiario: vtPadrao,
+      vaDiario: 0,
+      vtDiario: 0,
       jornadaId: 'jornada-44h',
+      gradeSemanal: cloneGradeSemanal(DEFAULT_GRADE_SEMANAL),
       ativo: true,
       criadoEm: new Date().toISOString(),
     };

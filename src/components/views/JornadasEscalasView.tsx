@@ -5,10 +5,14 @@ import {
   Atestado,
   Colaborador,
   ConfiguracaoEmpresa,
+  DEFAULT_GRADE_SEMANAL,
   Feriado,
   JornadaTemplate,
+  ORDEM_DIAS_SEMANA,
   RegistroPonto,
   Unidade,
+  calcularMinutosDiaGrade,
+  calcularMinutosSemanaGrade,
 } from '../../types/rh';
 import {
   calcularEspelhoMensal,
@@ -22,6 +26,58 @@ interface JornadasViewProps {
 }
 
 export const JornadasView: React.FC<JornadasViewProps> = ({ colaborador, jornada }) => {
+  const grade = colaborador.gradeSemanal || {
+    ...DEFAULT_GRADE_SEMANAL,
+    seg: {
+      ativo: true,
+      entrada: jornada.segSexEntrada,
+      saidaAlmoco: jornada.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: jornada.intervaloMin > 0 ? '14:00' : '',
+      saida: jornada.segSexSaida,
+    },
+    ter: {
+      ativo: true,
+      entrada: jornada.segSexEntrada,
+      saidaAlmoco: jornada.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: jornada.intervaloMin > 0 ? '14:00' : '',
+      saida: jornada.segSexSaida,
+    },
+    qua: {
+      ativo: true,
+      entrada: jornada.segSexEntrada,
+      saidaAlmoco: jornada.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: jornada.intervaloMin > 0 ? '14:00' : '',
+      saida: jornada.segSexSaida,
+    },
+    qui: {
+      ativo: true,
+      entrada: jornada.segSexEntrada,
+      saidaAlmoco: jornada.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: jornada.intervaloMin > 0 ? '14:00' : '',
+      saida: jornada.segSexSaida,
+    },
+    sex: {
+      ativo: true,
+      entrada: jornada.segSexEntrada,
+      saidaAlmoco: jornada.intervaloMin > 0 ? '13:00' : '',
+      retornoAlmoco: jornada.intervaloMin > 0 ? '14:00' : '',
+      saida: jornada.segSexSaida,
+    },
+    sab: {
+      ativo: jornada.sabadoAtivo,
+      entrada: jornada.sabadoEntrada,
+      saidaAlmoco: '',
+      retornoAlmoco: '',
+      saida: jornada.sabadoSaida,
+    },
+    dom: {
+      ...DEFAULT_GRADE_SEMANAL.dom,
+      ativo: false,
+    },
+  };
+
+  const cargaSemanalMin = calcularMinutosSemanaGrade(grade);
+
   return (
     <div className="space-y-3">
       <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-2.5">
@@ -30,41 +86,53 @@ export const JornadasView: React.FC<JornadasViewProps> = ({ colaborador, jornada
           <h1 className="text-sm font-bold">Minha Jornada de Trabalho</h1>
         </div>
 
-        <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800">
-          <div className="text-xs font-bold">{jornada.nome}</div>
-          <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Carga semanal: {jornada.horasSemanais}h · Lotação: {colaborador.lotacao}
+        <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/70 dark:border-zinc-800 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-bold">Grade Semanal Personalizada</div>
+            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Lotação: {colaborador.lotacao}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] text-zinc-500 dark:text-zinc-400">Carga Semanal</div>
+            <div className="text-xs font-mono tabular-nums font-bold text-[#DC2626]">
+              {formatMinutesToHHMM(cargaSemanalMin)}
+            </div>
           </div>
         </div>
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800 text-xs">
-          <div className="py-2 flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Segunda a Sexta</span>
-            <span className="font-mono tabular-nums font-semibold">
-              {jornada.segSexEntrada} às {jornada.segSexSaida} ({formatMinutesToHHMM(jornada.segSexCargaMin)}/dia)
-            </span>
-          </div>
-          <div className="py-2 flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Intervalo intrajornada</span>
-            <span className="font-mono tabular-nums font-semibold">
-              {jornada.intervaloMin} min (flexível)
-            </span>
-          </div>
-          <div className="py-2 flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Sábado</span>
-            <span className="font-mono tabular-nums font-semibold">
-              {jornada.sabadoAtivo
-                ? `${jornada.sabadoEntrada} às ${jornada.sabadoSaida} (${formatMinutesToHHMM(jornada.sabadoCargaMin)})`
-                : 'Folga semanal'}
-            </span>
-          </div>
-          <div className="py-2 flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Domingo</span>
-            <span className="font-semibold text-zinc-600 dark:text-zinc-300">DSR · Folga</span>
-          </div>
-          <div className="py-2 flex items-center justify-between">
+          {ORDEM_DIAS_SEMANA.map(({ key, label }) => {
+            const dia = grade[key];
+            const minDia = calcularMinutosDiaGrade(dia);
+            return (
+              <div key={key} className="py-2 flex items-center justify-between gap-2">
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">{label}</span>
+                {dia.ativo ? (
+                  <div className="text-right font-mono tabular-nums">
+                    <div className="font-semibold text-[11px]">
+                      {dia.entrada}–{dia.saida}
+                      {dia.saidaAlmoco && dia.retornoAlmoco
+                        ? ` (Alm: ${dia.saidaAlmoco}–${dia.retornoAlmoco})`
+                        : ''}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      {formatMinutesToHHMM(minDia)}/dia
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                    Folga
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <div className="py-2 flex items-center justify-between gap-2">
             <span className="text-zinc-500 dark:text-zinc-400">Tolerância CLT (Art. 58 §1º)</span>
-            <span className="font-mono tabular-nums font-semibold">5 min/batida · 10 min/dia</span>
+            <span className="font-mono tabular-nums font-semibold text-[11px]">
+              5 min/batida · 10 min/dia
+            </span>
           </div>
         </div>
       </section>

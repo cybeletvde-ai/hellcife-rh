@@ -13,6 +13,10 @@ import {
   RetribuicaoEmpresa,
   TipoMarcacao,
   Unidade,
+  calcularIntervaloDiaGradeMin,
+  calcularMinutosDiaGrade,
+  calcularMinutosSemanaGrade,
+  getDiaGradePorDataIdx,
 } from '../types/rh';
 
 export function getTodayStr(): string {
@@ -167,6 +171,7 @@ export function calcularDiaPonto(
   let minutosPrevistos = 0;
   let inicioPrevistoStr = jornada.segSexEntrada;
   let fimPrevistoStr = jornada.segSexSaida;
+  let intervaloDiaMin = jornada.intervaloMin;
 
   if (ajuste?.tipo === 'folga') {
     minutosPrevistos = 0;
@@ -174,7 +179,19 @@ export function calcularDiaPonto(
     minutosPrevistos = ajuste.cargaMinCustom ?? jornada.segSexCargaMin;
     inicioPrevistoStr = ajuste.entradaCustom || jornada.segSexEntrada;
     fimPrevistoStr = ajuste.saidaCustom || jornada.segSexSaida;
-  } else if (ehDomingo || ehFeriado) {
+  } else if (ehFeriado) {
+    minutosPrevistos = 0;
+  } else if (colab.gradeSemanal) {
+    const diaCfg = getDiaGradePorDataIdx(colab.gradeSemanal, diaSemanaIdx);
+    if (!diaCfg.ativo) {
+      minutosPrevistos = 0;
+    } else {
+      minutosPrevistos = calcularMinutosDiaGrade(diaCfg);
+      inicioPrevistoStr = diaCfg.entrada || jornada.segSexEntrada;
+      fimPrevistoStr = diaCfg.saida || jornada.segSexSaida;
+      intervaloDiaMin = calcularIntervaloDiaGradeMin(diaCfg);
+    }
+  } else if (ehDomingo) {
     minutosPrevistos = 0;
   } else if (diaSemanaIdx === 6) {
     minutosPrevistos = jornada.sabadoAtivo ? jornada.sabadoCargaMin : 0;
@@ -207,7 +224,7 @@ export function calcularDiaPonto(
     const fim = sai < ent ? sai + 1440 : sai;
     const bruto = Math.max(0, fim - ent);
     // Se trabalhou direto sem bater almoço em dia com intervalo > 0 e jornada > 6h
-    const descontoIntervalo = bruto > 360 && minutosPrevistos > 360 ? jornada.intervaloMin : 0;
+    const descontoIntervalo = bruto > 360 && minutosPrevistos > 360 ? intervaloDiaMin : 0;
     minutosTrabalhados += Math.max(0, bruto - descontoIntervalo);
     minutosNoturnosRelogio += calcularMinutosNoturnos(ent, fim);
   }
@@ -467,7 +484,10 @@ export function calcularHoleriteMensal(
   jornada: JornadaTemplate,
   config: ConfiguracaoEmpresa
 ): HoleriteCalculado {
-  const divisorHoras = Math.round((jornada.horasSemanais / 6) * 30) || 220;
+  const horasSemanaisEfetivas = colab.gradeSemanal
+    ? calcularMinutosSemanaGrade(colab.gradeSemanal) / 60
+    : jornada.horasSemanais;
+  const divisorHoras = Math.round((horasSemanaisEfetivas / 6) * 30) || 220;
   const valorHoraNormal = colab.salarioBase / divisorHoras;
 
   const valorExtra50 = Number(((resumo.totalMinExtra50 / 60) * valorHoraNormal * 1.5).toFixed(2));
@@ -503,12 +523,18 @@ export function calcularHoleriteMensal(
   const baseInss = Math.max(0, Number((totalProventos - descontoAtrasos).toFixed(2)));
   const inss = calcularINSS2026(baseInss);
 
-  const beneficioVaMes = Number((resumo.diasTrabalhados * colab.vaDiario).toFixed(2));
-  const beneficioVtMes = Number((resumo.diasTrabalhados * colab.vtDiario).toFixed(2));
+  const vaDiarioEfetivo = Math.max(0, Number(colab.vaDiario) || 0);
+  const vtDiarioEfetivo = Math.max(0, Number(colab.vtDiario) || 0);
+  const beneficioVaMes = Number((resumo.diasTrabalhados * vaDiarioEfetivo).toFixed(2));
+  const beneficioVtMes = Number((resumo.diasTrabalhados * vtDiarioEfetivo).toFixed(2));
 
-  // Lei 7.418/85: Desconto VT até 6% do salário base, limitado ao valor concedido
+  // Lei 7.418/85: Desconto VT até 6% do salário base, limitado ao valor concedido.
+  // Se Vale-Transporte diário for 0,00, não aplica desconto de 6% no holerite/folha.
   const vt6PctTeorico = Number((colab.salarioBase * 0.06).toFixed(2));
-  const descontoVt6Pct = Math.min(vt6PctTeorico, beneficioVtMes);
+  const descontoVt6Pct =
+    vtDiarioEfetivo > 0 && beneficioVtMes > 0
+      ? Math.min(vt6PctTeorico, beneficioVtMes)
+      : 0;
 
   const totalDescontos = Number((descontoAtrasos + inss.valor + descontoVt6Pct).toFixed(2));
   const salarioLiquido = Math.max(0, Number((totalProventos - totalDescontos).toFixed(2)));

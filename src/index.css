@@ -15,24 +15,81 @@
   font-variant-numeric: tabular-nums;
 }
 
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
 @media print {
-  body {
+  html,
+  body,
+  #root,
+  #root > div {
     background: #ffffff !important;
     color: #111827 !important;
+    min-height: auto !important;
   }
+
   .no-print {
     display: none !important;
   }
+
   .print-only-full {
     max-width: 100% !important;
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
   }
+
   .print-card {
     box-shadow: none !important;
-    border: 1px solid #d1d5db !important;
+    border: 1px solid #9ca3af !important;
+    border-radius: 6px !important;
     background: #ffffff !important;
     color: #111827 !important;
+    padding: 16px !important;
+  }
+
+  .print-box {
+    background: #f9fafb !important;
+    border: 1px solid #d1d5db !important;
+    color: #111827 !important;
+  }
+
+  .print-table-head {
+    background: #f3f4f6 !important;
+    border-color: #9ca3af !important;
+    color: #111827 !important;
+  }
+
+  .print-liquido-box {
+    background: #f3f4f6 !important;
+    border: 1.5px solid #111827 !important;
+    color: #111827 !important;
+  }
+
+  .print-border {
+    border-color: #d1d5db !important;
+  }
+
+  .print-divide > tr,
+  .print-divide > div {
+    border-color: #e5e7eb !important;
+  }
+
+  .print-text-strong {
+    color: #000000 !important;
+  }
+
+  .print-text-body {
+    color: #1f2937 !important;
+  }
+
+  .print-text-muted {
+    color: #4b5563 !important;
+  }
+
+  .print-sig-line {
+    border-bottom: 1px solid #374151 !important;
   }
 }

@@ -1,10 +1,13 @@
 import React from 'react';
 
+export const LOGO_EMPRESA_SRC =
+  '/assets/aistudio/Captura_de_tela_2026-11-19_010010_009c628b.png';
+
 export const BrandLogo: React.FC = () => {
   return (
     <div className="flex items-center justify-center gap-3">
       <img
-        src="/assets/aistudio/Captura_de_tela_2026-11-19_010010_009c628b.png"
+        src={LOGO_EMPRESA_SRC}
         alt="Logótipo Hellcife Tattoo Supply"
         className="h-[44px] w-auto object-contain shrink-0 mix-blend-lighten select-none"
       />

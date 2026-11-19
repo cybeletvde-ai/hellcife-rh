@@ -7,12 +7,14 @@ import {
   DadosEmpresaUnidade,
   FechamentoMensal,
   Feriado,
+  GradeSemanal,
   JornadaTemplate,
   LocalizacaoUnidade,
   Lotacao,
   RegistroPonto,
   StatusAtestado,
   Unidade,
+  cloneGradeSemanal,
 } from '../types/rh';
 import { DEFAULT_CONFIG, DEFAULT_FERIADOS, DEFAULT_JORNADAS } from './storage';
 import { supabase } from './supabaseClient';
@@ -69,6 +71,22 @@ function normUnidade(v: string): Unidade {
   return v === 'Jaboatão' ? 'Jaboatão' : 'Recife';
 }
 
+function parseGradeSemanal(raw: unknown): GradeSemanal | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as Partial<GradeSemanal>;
+      return cloneGradeSemanal(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof raw === 'object') {
+    return cloneGradeSemanal(raw as Partial<GradeSemanal>);
+  }
+  return undefined;
+}
+
 function rowToColaborador(r: Record<string, any>): Colaborador {
   return {
     id: String(r.id),
@@ -76,13 +94,16 @@ function rowToColaborador(r: Record<string, any>): Colaborador {
     cpf: String(r.cpf || ''),
     email: String(r.email || '').toLowerCase(),
     senha: String(r.senha || ''),
+    telefone: r.telefone ? String(r.telefone) : '',
+    endereco: r.endereco ? String(r.endereco) : '',
     funcao: String(r.funcao || ''),
     lotacao: normLotacao(String(r.lotacao || 'Recife')),
     dataAdmissao: String(r.data_admissao || ''),
     salarioBase: Number(r.salario_base ?? 1621),
-    vaDiario: Number(r.va_diario ?? 14),
-    vtDiario: Number(r.vt_diario ?? 13),
+    vaDiario: Number(r.va_diario ?? 0),
+    vtDiario: Number(r.vt_diario ?? 0),
     jornadaId: String(r.jornada_id || 'jornada-44h'),
+    gradeSemanal: parseGradeSemanal(r.grade_semanal),
     ativo: Boolean(r.ativo ?? true),
     criadoEm: String(r.criado_em || new Date().toISOString()),
   };
@@ -95,6 +116,8 @@ function colaboradorToRow(c: Colaborador) {
     cpf: c.cpf,
     email: c.email.trim().toLowerCase(),
     senha: c.senha,
+    telefone: c.telefone || '',
+    endereco: c.endereco || '',
     funcao: c.funcao,
     lotacao: c.lotacao,
     data_admissao: c.dataAdmissao,
@@ -102,6 +125,7 @@ function colaboradorToRow(c: Colaborador) {
     va_diario: c.vaDiario,
     vt_diario: c.vtDiario,
     jornada_id: c.jornadaId,
+    grade_semanal: c.gradeSemanal ?? null,
     ativo: c.ativo,
     criado_em: c.criadoEm,
   };

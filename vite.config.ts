@@ -12,7 +12,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'apple-touch-icon.png'],
+        includeAssets: ['apple-touch-icon.png'],
         manifest: {
           id: '/',
           name: 'HellcifeRH+ · Hellcife Tattoo Supply',
@@ -46,6 +46,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
             {

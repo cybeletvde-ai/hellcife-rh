@@ -116,7 +116,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-50 flex no-print">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/65 backdrop-blur-xs"
