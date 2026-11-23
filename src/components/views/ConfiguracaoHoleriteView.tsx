@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calculator,
   CheckCircle2,
@@ -242,6 +242,8 @@ export const ConfiguracaoHoleriteView: React.FC<ConfiguracaoHoleriteViewProps> =
   const [liberado, setLiberado] = useState<boolean>(false);
   const [salvando, setSalvando] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const loadedContextRef = useRef<string>('');
+  const lastLoadedUpdatedAtRef = useRef<string>('');
 
   // Carrega configuração salva no Supabase ou gera sugestões iniciais quando muda colaborador/competência
   useEffect(() => {
@@ -249,19 +251,34 @@ export const ConfiguracaoHoleriteView: React.FC<ConfiguracaoHoleriteViewProps> =
       setRecebiveis([]);
       setDescontaveis([]);
       setLiberado(false);
+      loadedContextRef.current = '';
+      lastLoadedUpdatedAtRef.current = '';
       return;
     }
 
-    if (configSalvaExistente) {
-      setRecebiveis(configSalvaExistente.recebiveis.map((r) => ({ ...r })));
-      setDescontaveis(configSalvaExistente.descontaveis.map((d) => ({ ...d })));
-      setLiberado(Boolean(configSalvaExistente.liberado));
-    } else if (sugestoesPonto) {
-      setRecebiveis(sugestoesPonto.recebiveis.map((r) => ({ ...r })));
-      setDescontaveis(sugestoesPonto.descontaveis.map((d) => ({ ...d })));
-      setLiberado(false);
+    const contextKey = `${colabSelecionado.id}__${mes}`;
+    const savedUpdatedAt = configSalvaExistente?.atualizadoEm || '';
+    const contextChanged = loadedContextRef.current !== contextKey;
+    const savedAppearedFirstTime =
+      !contextChanged && Boolean(configSalvaExistente) && lastLoadedUpdatedAtRef.current === '';
+
+    if (contextChanged || savedAppearedFirstTime) {
+      if (configSalvaExistente) {
+        setRecebiveis(configSalvaExistente.recebiveis.map((r) => ({ ...r })));
+        setDescontaveis(configSalvaExistente.descontaveis.map((d) => ({ ...d })));
+        setLiberado(Boolean(configSalvaExistente.liberado));
+        lastLoadedUpdatedAtRef.current = savedUpdatedAt;
+      } else if (sugestoesPonto) {
+        setRecebiveis(sugestoesPonto.recebiveis.map((r) => ({ ...r })));
+        setDescontaveis(sugestoesPonto.descontaveis.map((d) => ({ ...d })));
+        setLiberado(false);
+        lastLoadedUpdatedAtRef.current = '';
+      }
+      loadedContextRef.current = contextKey;
+      if (contextChanged) {
+        setFeedback(null);
+      }
     }
-    setFeedback(null);
   }, [colabSelecionado?.id, mes, configSalvaExistente?.atualizadoEm]);
 
   const totalRecebiveis = useMemo(
@@ -428,19 +445,21 @@ export const ConfiguracaoHoleriteView: React.FC<ConfiguracaoHoleriteViewProps> =
         totalRecebiveis: totalRecFinal,
         totalDescontaveis: totalDescFinal,
         salarioLiquido: liquidoFinal,
-        liberado,
+        liberado: Boolean(liberado),
         configuradoPor: colaboradorAtual.nome,
         atualizadoEm: new Date().toISOString(),
       };
 
       const ok = await onSalvarHoleriteConfigurado(registro);
       if (ok) {
+        lastLoadedUpdatedAtRef.current = registro.atualizadoEm;
         setRecebiveis(recebiveisLimpos);
         setDescontaveis(descontaveisLimpos);
+        setLiberado(Boolean(registro.liberado));
         setFeedback(
-          liberado
+          registro.liberado
             ? `Holerite de ${colabSelecionado.nome} (${mes}) salvo e LIBERADO para visualização do colaborador.`
-            : `Configuração de ${colabSelecionado.nome} (${mes}) salva no Supabase (ainda oculta para o colaborador).`
+            : `Configuração de ${colabSelecionado.nome} (${mes}) salva com sucesso (visualização do colaborador BLOQUEADA).`
         );
       }
     } finally {

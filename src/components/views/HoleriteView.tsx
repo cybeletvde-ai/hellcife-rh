@@ -101,7 +101,7 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
 
   const verificandoLiberacao = configNuvem === undefined;
   const configEfetiva = configNuvem === undefined ? null : configNuvem;
-  const holeriteLiberado = Boolean(configEfetiva && configEfetiva.liberado === true);
+  const holeriteLiberado = Boolean(configEfetiva?.liberado);
 
   return (
     <div className="space-y-3">
@@ -146,14 +146,14 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
             <Clock className="w-5 h-5" />
           </div>
           <h2 className="text-sm font-bold text-[#111827] dark:text-white max-w-sm">
-            Holerite em processamento pelo RH. Aguarde a liberação pela gestão.
+            Holerite em processamento pelo RH
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm leading-relaxed">
-            Competência{' '}
+            Aguarde a liberação pela gestão para a competência{' '}
             <strong className="font-mono text-[#111827] dark:text-zinc-200">
               {mes.split('-').reverse().join('/')}
             </strong>
-            . Os valores e o download em PDF serão exibidos assim que o RH marcar a liberação.
+            .
           </p>
         </section>
       )}

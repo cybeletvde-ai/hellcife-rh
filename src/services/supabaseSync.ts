@@ -450,7 +450,7 @@ function holeriteConfiguradoToRow(h: HoleriteConfigurado) {
     total_recebiveis: h.totalRecebiveis,
     total_descontaveis: h.totalDescontaveis,
     salario_liquido: h.salarioLiquido,
-    liberado: h.liberado,
+    liberado: Boolean(h.liberado),
     configurado_por: h.configuradoPor ?? null,
     atualizado_em: h.atualizadoEm || new Date().toISOString(),
   };
@@ -544,7 +544,17 @@ export async function fetchAllCloudData(): Promise<CloudFetchResult> {
     if (holeritesRes.error) {
       erros.push(formatSupabaseError(holeritesRes.error, 'Leitura de holerites configurados'));
     } else if (Array.isArray(holeritesRes.data)) {
-      snapshot.holeritesConfigurados = holeritesRes.data.map(rowToHoleriteConfigurado);
+      const vistos = new Set<string>();
+      const unicos: HoleriteConfigurado[] = [];
+      for (const row of holeritesRes.data) {
+        const mapped = rowToHoleriteConfigurado(row);
+        const key = `${mapped.colaboradorId}__${mapped.mes}`;
+        if (!vistos.has(key)) {
+          vistos.add(key);
+          unicos.push(mapped);
+        }
+      }
+      snapshot.holeritesConfigurados = unicos;
     }
 
     if (feriadosRes.error) {
@@ -858,20 +868,58 @@ export const cloudSync = {
       .select('*')
       .eq('colaborador_id', colaboradorId)
       .eq('mes', mes)
-      .maybeSingle();
+      .order('atualizado_em', { ascending: false })
+      .limit(1);
     throwIfError(error, 'Erro ao consultar configuração do holerite');
-    return data ? rowToHoleriteConfigurado(data as Record<string, any>) : null;
+    if (!Array.isArray(data) || data.length === 0) return null;
+    return rowToHoleriteConfigurado(data[0] as Record<string, any>);
   },
 
   async upsertHoleriteConfigurado(cfg: HoleriteConfigurado): Promise<HoleriteConfigurado> {
-    const row = holeriteConfiguradoToRow(cfg);
-    const { data, error } = await supabase
+    const cfgNormalizado: HoleriteConfigurado = {
+      ...cfg,
+      liberado: Boolean(cfg.liberado),
+      atualizadoEm: cfg.atualizadoEm || new Date().toISOString(),
+    };
+    const row = holeriteConfiguradoToRow(cfgNormalizado);
+
+    const { data: existentes, error: buscaError } = await supabase
       .from('holerites_configurados')
-      .upsert(row, { onConflict: 'colaborador_id,mes' })
+      .select('id')
+      .eq('colaborador_id', cfgNormalizado.colaboradorId)
+      .eq('mes', cfgNormalizado.mes);
+    throwIfError(buscaError, 'Erro ao localizar configuração do holerite');
+
+    if (Array.isArray(existentes) && existentes.length > 0) {
+      const { data: atualizados, error: updateError } = await supabase
+        .from('holerites_configurados')
+        .update({
+          recebiveis: row.recebiveis,
+          descontaveis: row.descontaveis,
+          total_recebiveis: row.total_recebiveis,
+          total_descontaveis: row.total_descontaveis,
+          salario_liquido: row.salario_liquido,
+          liberado: Boolean(cfgNormalizado.liberado),
+          configurado_por: row.configurado_por,
+          atualizado_em: row.atualizado_em,
+        })
+        .eq('colaborador_id', cfgNormalizado.colaboradorId)
+        .eq('mes', cfgNormalizado.mes)
+        .select('*');
+      throwIfError(updateError, 'Erro ao atualizar configuração do holerite');
+      if (Array.isArray(atualizados) && atualizados.length > 0) {
+        return rowToHoleriteConfigurado(atualizados[0] as Record<string, any>);
+      }
+      return cfgNormalizado;
+    }
+
+    const { data: inserido, error: insertError } = await supabase
+      .from('holerites_configurados')
+      .insert(row)
       .select('*')
       .single();
-    throwIfError(error, 'Erro ao salvar configuração do holerite');
-    return data ? rowToHoleriteConfigurado(data as Record<string, any>) : cfg;
+    throwIfError(insertError, 'Erro ao salvar configuração do holerite');
+    return inserido ? rowToHoleriteConfigurado(inserido as Record<string, any>) : cfgNormalizado;
   },
 };
 
