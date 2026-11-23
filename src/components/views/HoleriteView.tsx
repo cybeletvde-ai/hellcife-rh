@@ -109,7 +109,7 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Receipt className="w-4 h-4 text-[#DC2626] shrink-0" />
-            <h1 className="text-sm font-bold truncate">Holerite · INSS 2026</h1>
+            <h1 className="text-sm font-bold truncate">Holerite</h1>
           </div>
           <input
             type="month"
