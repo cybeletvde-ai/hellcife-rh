@@ -15,7 +15,7 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
         manifest: {
           id: '/',
-          name: 'HELLCIFE RH+ · Hellcife Tattoo Supply',
+          name: 'Hellcife - Sistema de Ponto e RH',
           short_name: 'HELLCIFE RH+',
           description: 'Sistema de Ponto Eletrônico, Escalas, Horas Extras e Folha de Pagamento — Hellcife Tattoo Supply.',
           theme_color: '#09090B',

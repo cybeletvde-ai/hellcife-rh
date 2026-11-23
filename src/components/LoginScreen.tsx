@@ -149,6 +149,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-[430px] md:max-w-md mx-auto px-3 py-4 overflow-x-hidden flex flex-col justify-center gap-3">
+        <div className="text-center">
+          <h1 className="text-sm sm:text-base font-bold text-white tracking-tight">
+            Hellcife - Sistema de Ponto e RH
+          </h1>
+        </div>
+
         <PWAInstallBannerCard />
 
         <div className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-lg border border-zinc-200/80 dark:border-zinc-800">
@@ -195,9 +201,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           {modo === 'login' ? (
             <form onSubmit={handleSubmitLogin} className="space-y-3">
               <div>
-                <h1 className="text-sm font-bold text-[#111827] dark:text-white">
+                <h2 className="text-sm font-bold text-[#111827] dark:text-white">
                   Acesso do Colaborador
-                </h1>
+                </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Informe seu e-mail e senha para registrar o ponto.
                 </p>
@@ -296,9 +302,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           ) : (
             <form onSubmit={handleSubmitCadastro} className="space-y-2.5">
               <div>
-                <h1 className="text-sm font-bold text-[#111827] dark:text-white">
+                <h2 className="text-sm font-bold text-[#111827] dark:text-white">
                   Primeiro Acesso · Cadastro Inicial
-                </h1>
+                </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Preencha seus dados para criar seu acesso de Colaborador.
                 </p>
