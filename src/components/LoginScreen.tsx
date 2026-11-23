@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, Lock, Mail, MapPin, UserPlus, LogIn, Briefcase, User } from 'lucide-react';
 import { Colaborador, DEFAULT_GRADE_SEMANAL, Lotacao, Unidade, cloneGradeSemanal } from '../types/rh';
 import { getTodayStr } from '../utils/cltCalculations';
-import { PWAInstallButton } from './PWAInstallButton';
+import { PWAInstallBannerCard } from './PWAInstallBannerCard';
 import { BrandLogo } from './BrandLogo';
 
 interface LoginScreenProps {
@@ -148,7 +148,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-[430px] md:max-w-md mx-auto px-3 py-4 overflow-x-hidden flex flex-col justify-center">
+      <main className="flex-1 w-full max-w-[430px] md:max-w-md mx-auto px-3 py-4 overflow-x-hidden flex flex-col justify-center gap-3">
+        <PWAInstallBannerCard />
 
         <div className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 shadow-lg border border-zinc-200/80 dark:border-zinc-800">
           {/* Segmented Mode Switch */}
@@ -419,9 +420,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               </button>
             </form>
           )}
-        </div>
-        <div className="mt-3">
-          <PWAInstallButton />
         </div>
       </main>
     </div>
