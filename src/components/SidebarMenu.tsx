@@ -16,6 +16,7 @@ import {
   Paperclip,
   PieChart,
   Receipt,
+  SlidersHorizontal,
   Sun,
   Timer,
   UserCog,
@@ -59,6 +60,7 @@ const SEC_RH: MenuItem[] = [
   { id: 'rh-fechamento', label: 'Fechamento', icon: CheckSquare },
   { id: 'rh-relatorio', label: 'Relatório', icon: FileText },
   { id: 'rh-retribuicao', label: 'Retribuição', icon: PieChart },
+  { id: 'rh-holerite-config', label: 'Configuração do Holerite', icon: SlidersHorizontal },
 ];
 
 const SEC_SISTEMA: MenuItem[] = [

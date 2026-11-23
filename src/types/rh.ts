@@ -16,6 +16,7 @@ export type MenuRoute =
   | 'rh-fechamento'
   | 'rh-relatorio'
   | 'rh-retribuicao'
+  | 'rh-holerite-config'
   | 'sys-colaboradores'
   | 'sys-empresa'
   | 'sys-configuracoes'
@@ -412,4 +413,27 @@ export interface RetribuicaoEmpresa {
   fgtsSobreProvisoes: number;
   beneficiosExternos: number;
   custoTotalEmpresa: number;
+}
+
+export interface RubricaHoleriteItem {
+  id: string;
+  descricao: string;
+  referencia?: string;
+  valor: number;
+  selecionado: boolean;
+  custom?: boolean;
+}
+
+export interface HoleriteConfigurado {
+  id: string; // `${colaboradorId}__${mes}`
+  colaboradorId: string;
+  mes: string; // YYYY-MM
+  recebiveis: RubricaHoleriteItem[];
+  descontaveis: RubricaHoleriteItem[];
+  totalRecebiveis: number;
+  totalDescontaveis: number;
+  salarioLiquido: number;
+  liberado: boolean;
+  configuradoPor?: string;
+  atualizadoEm: string;
 }

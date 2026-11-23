@@ -475,6 +475,35 @@ export function calcularINSS2026(baseCalculo: number): {
   return { valor, aliquotaEfetiva, faixas };
 }
 
+/**
+ * Cálculo estimado IRRF 2026 (Isenção/Redutor até R$ 5.000,00; redução gradual até R$ 7.350,00).
+ */
+export function calcularIRRF2026(baseCalculo: number): number {
+  if (baseCalculo <= 5000) return 0;
+
+  let impostoTabela = 0;
+  if (baseCalculo <= 2428.8) {
+    impostoTabela = 0;
+  } else if (baseCalculo <= 2826.65) {
+    impostoTabela = baseCalculo * 0.075 - 182.16;
+  } else if (baseCalculo <= 3751.05) {
+    impostoTabela = baseCalculo * 0.15 - 394.16;
+  } else if (baseCalculo <= 4664.68) {
+    impostoTabela = baseCalculo * 0.225 - 675.49;
+  } else {
+    impostoTabela = baseCalculo * 0.275 - 908.73;
+  }
+
+  impostoTabela = Math.max(0, impostoTabela);
+
+  if (baseCalculo <= 7350) {
+    const redutor = Math.max(0, 978.62 - 0.133145 * baseCalculo);
+    return Number(Math.max(0, impostoTabela - redutor).toFixed(2));
+  }
+
+  return Number(impostoTabela.toFixed(2));
+}
+
 export function calcularHoleriteMensal(
   colab: Colaborador,
   resumo: ResumoMensalColaborador,

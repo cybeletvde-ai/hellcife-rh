@@ -4,11 +4,13 @@ import {
   Colaborador,
   ConfiguracaoEmpresa,
   HoleriteCalculado,
+  HoleriteConfigurado,
   ResumoMensalColaborador,
   Unidade,
   getDadosEmpresaUnidade,
 } from '../types/rh';
 import {
+  calcularINSS2026,
   formatBRL,
   formatDateBR,
   formatMinutesToHHMM,
@@ -43,6 +45,7 @@ interface DemonstrativoHoleriteCardProps {
   mes: string;
   resumo: ResumoMensalColaborador;
   holerite: HoleriteCalculado;
+  holeriteConfigurado?: HoleriteConfigurado;
   config: ConfiguracaoEmpresa;
 }
 
@@ -52,6 +55,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
   mes,
   resumo,
   holerite,
+  holeriteConfigurado,
   config,
 }) => {
   const [mostrarFaixas, setMostrarFaixas] = useState(false);
@@ -80,8 +84,38 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
     .filter(Boolean)
     .join(' · ');
 
-  const fgtsMes = Number((holerite.baseInss * 0.08).toFixed(2));
-  const baseIrrf = Math.max(0, Number((holerite.baseInss - holerite.inssValor).toFixed(2)));
+  const recSelecionados = holeriteConfigurado
+    ? holeriteConfigurado.recebiveis.filter((r) => r.selecionado)
+    : [];
+  const descSelecionados = holeriteConfigurado
+    ? holeriteConfigurado.descontaveis.filter((d) => d.selecionado)
+    : [];
+
+  const totalVencimentos = holeriteConfigurado
+    ? holeriteConfigurado.totalRecebiveis
+    : holerite.totalProventos;
+  const totalDescontosFinal = holeriteConfigurado
+    ? holeriteConfigurado.totalDescontaveis
+    : holerite.totalDescontos;
+  const salarioLiquidoFinal = holeriteConfigurado
+    ? holeriteConfigurado.salarioLiquido
+    : holerite.salarioLiquido;
+
+  const atrasosConfig = holeriteConfigurado
+    ? descSelecionados.find((d) => d.id === 'atrasos')?.valor || 0
+    : holerite.descontoAtrasos;
+  const baseInssFinal = holeriteConfigurado
+    ? Math.max(0, Number((totalVencimentos - atrasosConfig).toFixed(2)))
+    : holerite.baseInss;
+  const inssFinal = holeriteConfigurado
+    ? descSelecionados.find((d) => d.id === 'inss')?.valor || 0
+    : holerite.inssValor;
+  const faixasInssDisplay = holeriteConfigurado
+    ? calcularINSS2026(baseInssFinal).faixas
+    : holerite.inssFaixas;
+
+  const fgtsMes = Number((baseInssFinal * 0.08).toFixed(2));
+  const baseIrrf = Math.max(0, Number((baseInssFinal - inssFinal).toFixed(2)));
   const competenciaLabel = formatCompetenciaBR(mes);
 
   const handleBaixarPdf = () => {
@@ -91,6 +125,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
       mes,
       resumo,
       holerite,
+      holeriteConfigurado,
       config,
     });
     setPdfFeedback('Holerite PDF gerado com sucesso!');
@@ -234,158 +269,205 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 print-divide">
-              <tr>
-                <td className="py-1.5 px-1.5 font-medium">Salário Base</td>
-                <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                  30d
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums font-semibold">
-                  {formatBRL(holerite.salarioBase)}
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                  —
-                </td>
-              </tr>
+              {holeriteConfigurado ? (
+                <>
+                  {recSelecionados.map((item) => (
+                    <tr key={`rec-${item.id}`}>
+                      <td className="py-1.5 px-1.5 font-medium">{item.descricao}</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {item.referencia || '-'}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums font-semibold">
+                        {formatBRL(item.valor)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  ))}
 
-              {holerite.valorExtra50 > 0 && (
-                <tr>
-                  <td className="py-1.5 px-1.5">Horas Extras +50%</td>
-                  <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                    {formatMinutesToHHMM(resumo.totalMinExtra50)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                    {formatBRL(holerite.valorExtra50)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                    —
-                  </td>
-                </tr>
+                  {descSelecionados.map((item) => (
+                    <tr key={`desc-${item.id}`}>
+                      <td className="py-1.5 px-1.5">
+                        <span>{item.descricao}</span>
+                        {item.id === 'inss' && (
+                          <button
+                            type="button"
+                            onClick={() => setMostrarFaixas((v) => !v)}
+                            className="no-print ml-1.5 text-[10px] text-[#DC2626] hover:underline cursor-pointer"
+                          >
+                            (ver faixas)
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {item.referencia || '-'}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(item.valor)}
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <tr>
+                    <td className="py-1.5 px-1.5 font-medium">Salário Base</td>
+                    <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                      30d
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums font-semibold">
+                      {formatBRL(holerite.salarioBase)}
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                      —
+                    </td>
+                  </tr>
+
+                  {holerite.valorExtra50 > 0 && (
+                    <tr>
+                      <td className="py-1.5 px-1.5">Horas Extras +50%</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {formatMinutesToHHMM(resumo.totalMinExtra50)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(holerite.valorExtra50)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  )}
+
+                  {holerite.valorExtra65 > 0 && (
+                    <tr>
+                      <td className="py-1.5 px-1.5">Horas Extras +65%</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {formatMinutesToHHMM(resumo.totalMinExtra65)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(holerite.valorExtra65)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  )}
+
+                  {holerite.valorExtra70 > 0 && (
+                    <tr>
+                      <td className="py-1.5 px-1.5">Horas Extras +70%</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {formatMinutesToHHMM(resumo.totalMinExtra70)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(holerite.valorExtra70)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  )}
+
+                  {holerite.valorExtra100 > 0 && (
+                    <tr>
+                      <td className="py-1.5 px-1.5">Domingos / Feriados +100%</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {formatMinutesToHHMM(resumo.totalMinExtra100)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(holerite.valorExtra100)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  )}
+
+                  {holerite.valorAdicionalNoturno > 0 && (
+                    <tr>
+                      <td className="py-1.5 px-1.5">Adicional Noturno</td>
+                      <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                        {formatMinutesToHHMM(resumo.totalMinNoturnos)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                        {formatBRL(holerite.valorAdicionalNoturno)}
+                      </td>
+                      <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                        —
+                      </td>
+                    </tr>
+                  )}
+
+                  <tr>
+                    <td className="py-1.5 px-1.5">DSR sobre Horas Extras</td>
+                    <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                      {resumo.domingosFeriadosMes}d
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                      {formatBRL(holerite.dsrSobreExtras)}
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                      —
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td className="py-1.5 px-1.5">Atrasos (&gt;10 min/dia)</td>
+                    <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                      {formatMinutesToHHMM(resumo.totalMinAtraso)}
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                      —
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                      {formatBRL(holerite.descontoAtrasos)}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td className="py-1.5 px-1.5">
+                      <span>INSS 2026</span>
+                      <button
+                        type="button"
+                        onClick={() => setMostrarFaixas((v) => !v)}
+                        className="no-print ml-1.5 text-[10px] text-[#DC2626] hover:underline cursor-pointer"
+                      >
+                        (ver faixas)
+                      </button>
+                    </td>
+                    <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                      {holerite.inssAliquotaEfetiva.toFixed(1).replace('.', ',')}%
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                      —
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                      {formatBRL(holerite.inssValor)}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td className="py-1.5 px-1.5">
+                      {colaborador.vtDiario > 0
+                        ? 'Vale-Transporte (6%)'
+                        : 'Vale-Transporte (Não optante)'}
+                    </td>
+                    <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
+                      {colaborador.vtDiario > 0 ? '6%' : '0%'}
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
+                      —
+                    </td>
+                    <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
+                      {formatBRL(holerite.descontoVt6Pct)}
+                    </td>
+                  </tr>
+                </>
               )}
-
-              {holerite.valorExtra65 > 0 && (
-                <tr>
-                  <td className="py-1.5 px-1.5">Horas Extras +65%</td>
-                  <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                    {formatMinutesToHHMM(resumo.totalMinExtra65)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                    {formatBRL(holerite.valorExtra65)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                    —
-                  </td>
-                </tr>
-              )}
-
-              {holerite.valorExtra70 > 0 && (
-                <tr>
-                  <td className="py-1.5 px-1.5">Horas Extras +70%</td>
-                  <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                    {formatMinutesToHHMM(resumo.totalMinExtra70)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                    {formatBRL(holerite.valorExtra70)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                    —
-                  </td>
-                </tr>
-              )}
-
-              {holerite.valorExtra100 > 0 && (
-                <tr>
-                  <td className="py-1.5 px-1.5">Domingos / Feriados +100%</td>
-                  <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                    {formatMinutesToHHMM(resumo.totalMinExtra100)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                    {formatBRL(holerite.valorExtra100)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                    —
-                  </td>
-                </tr>
-              )}
-
-              {holerite.valorAdicionalNoturno > 0 && (
-                <tr>
-                  <td className="py-1.5 px-1.5">Adicional Noturno</td>
-                  <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                    {formatMinutesToHHMM(resumo.totalMinNoturnos)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                    {formatBRL(holerite.valorAdicionalNoturno)}
-                  </td>
-                  <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                    —
-                  </td>
-                </tr>
-              )}
-
-              <tr>
-                <td className="py-1.5 px-1.5">DSR sobre Horas Extras</td>
-                <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                  {resumo.domingosFeriadosMes}d
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                  {formatBRL(holerite.dsrSobreExtras)}
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                  —
-                </td>
-              </tr>
-
-              <tr>
-                <td className="py-1.5 px-1.5">Atrasos (&gt;10 min/dia)</td>
-                <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                  {formatMinutesToHHMM(resumo.totalMinAtraso)}
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                  —
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                  {formatBRL(holerite.descontoAtrasos)}
-                </td>
-              </tr>
-
-              <tr>
-                <td className="py-1.5 px-1.5">
-                  <span>INSS 2026</span>
-                  <button
-                    type="button"
-                    onClick={() => setMostrarFaixas((v) => !v)}
-                    className="no-print ml-1.5 text-[10px] text-[#DC2626] hover:underline cursor-pointer"
-                  >
-                    (ver faixas)
-                  </button>
-                </td>
-                <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                  {holerite.inssAliquotaEfetiva.toFixed(1).replace('.', ',')}%
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                  —
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                  {formatBRL(holerite.inssValor)}
-                </td>
-              </tr>
-
-              <tr>
-                <td className="py-1.5 px-1.5">
-                  {colaborador.vtDiario > 0
-                    ? 'Vale-Transporte (6%)'
-                    : 'Vale-Transporte (Não optante)'}
-                </td>
-                <td className="py-1.5 px-1 text-right font-mono tabular-nums text-zinc-500 print-text-muted">
-                  {colaborador.vtDiario > 0 ? '6%' : '0%'}
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-zinc-400">
-                  —
-                </td>
-                <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                  {formatBRL(holerite.descontoVt6Pct)}
-                </td>
-              </tr>
             </tbody>
             <tfoot>
               <tr className="border-y border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/70 print-table-head font-bold">
@@ -393,10 +475,10 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
                   Totais (Vencimentos / Descontos)
                 </td>
                 <td className="py-1.5 px-1.5 text-right font-mono tabular-nums">
-                  {formatBRL(holerite.totalProventos)}
+                  {formatBRL(totalVencimentos)}
                 </td>
                 <td className="py-1.5 px-1.5 text-right font-mono tabular-nums text-red-700 dark:text-red-400 print-text-strong">
-                  {formatBRL(holerite.totalDescontos)}
+                  {formatBRL(totalDescontosFinal)}
                 </td>
               </tr>
             </tfoot>
@@ -409,7 +491,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
             <div className="font-semibold text-zinc-600 dark:text-zinc-300">
               Tabela Progressiva INSS 2026 (Mínimo R$ 1.621,00)
             </div>
-            {holerite.inssFaixas.map((f) => (
+            {faixasInssDisplay.map((f) => (
               <div key={f.faixa} className="flex justify-between text-zinc-500 dark:text-zinc-400">
                 <span>
                   {f.faixa} ({f.aliquota})
@@ -426,7 +508,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
             Valor Líquido a Receber
           </span>
           <span className="font-mono tabular-nums text-base font-extrabold">
-            {formatBRL(holerite.salarioLiquido)}
+            {formatBRL(salarioLiquidoFinal)}
           </span>
         </div>
 
@@ -441,7 +523,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
                 Base Cálc. INSS
               </span>
               <span className="font-mono tabular-nums font-semibold">
-                {formatBRL(holerite.baseInss)}
+                {formatBRL(baseInssFinal)}
               </span>
             </div>
             <div>
@@ -449,7 +531,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
                 Base Cálc. FGTS
               </span>
               <span className="font-mono tabular-nums font-semibold">
-                {formatBRL(holerite.baseInss)}
+                {formatBRL(baseInssFinal)}
               </span>
             </div>
             <div>

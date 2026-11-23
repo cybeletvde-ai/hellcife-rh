@@ -8,6 +8,7 @@ import {
   ConfiguracaoEmpresa,
   FechamentoMensal,
   Feriado,
+  HoleriteConfigurado,
   JornadaTemplate,
   MenuRoute,
   RegistroPonto,
@@ -34,6 +35,7 @@ import { BancoHorasView, HorasExtrasView } from './components/views/ExtrasBancoV
 import { HoleriteView } from './components/views/HoleriteView';
 import { AtestadosView, InformacoesView } from './components/views/AtestadosInfoView';
 import { FechamentoView, RelatorioView, RetribuicaoView } from './components/views/RHViews';
+import { ConfiguracaoHoleriteView } from './components/views/ConfiguracaoHoleriteView';
 import {
   ColaboradoresCrudView,
   ConfiguracoesView,
@@ -55,6 +57,7 @@ const ROTAS_VALIDAS: MenuRoute[] = [
   'rh-fechamento',
   'rh-relatorio',
   'rh-retribuicao',
+  'rh-holerite-config',
   'sys-colaboradores',
   'sys-empresa',
   'sys-configuracoes',
@@ -88,6 +91,7 @@ export default function App() {
   const [feriados, setFeriados] = useState<Feriado[]>([]);
   const [jornadas, setJornadas] = useState<JornadaTemplate[]>(DEFAULT_JORNADAS);
   const [avisos, setAvisos] = useState<AvisoEmpresa[]>([]);
+  const [holeritesConfigurados, setHoleritesConfigurados] = useState<HoleriteConfigurado[]>([]);
   const [config, setConfig] = useState<ConfiguracaoEmpresa>(DEFAULT_CONFIG);
   const [session, setSession] = useState<{ colaboradorId: string; unidadeAtiva: Unidade } | null>(
     () => storage.getSession()
@@ -121,6 +125,7 @@ export default function App() {
       setFeriados(snapshot.feriados);
       setJornadas(snapshot.jornadas);
       setAvisos(snapshot.avisos);
+      setHoleritesConfigurados(snapshot.holeritesConfigurados);
       setConfig(snapshot.config);
       if (errorMessage) {
         setErroBanco(errorMessage);
@@ -416,6 +421,29 @@ export default function App() {
     return true;
   };
 
+  const handleSalvarHoleriteConfigurado = async (
+    cfg: HoleriteConfigurado
+  ): Promise<boolean> => {
+    setErroBanco(null);
+    try {
+      const gravado = await cloudSync.upsertHoleriteConfigurado(cfg);
+      setHoleritesConfigurados((prev) => [
+        gravado,
+        ...prev.filter(
+          (h) => !(h.colaboradorId === gravado.colaboradorId && h.mes === gravado.mes)
+        ),
+      ]);
+      return true;
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro desconhecido ao salvar configuração do holerite no Supabase.';
+      setErroBanco(msg);
+      return false;
+    }
+  };
+
   const bannerErroSupabase = erroBanco ? (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)] max-w-[390px] rounded-xl bg-red-600 text-white px-3 py-2.5 shadow-2xl border border-red-400/50 flex items-start gap-2 text-xs no-print">
       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -604,6 +632,7 @@ export default function App() {
             feriados={feriados}
             atestados={atestados}
             config={config}
+            holeritesConfigurados={holeritesConfigurados}
           />
         )}
 
@@ -671,6 +700,23 @@ export default function App() {
             atestados={atestados}
             fechamentos={fechamentos}
             config={config}
+            holeritesConfigurados={holeritesConfigurados}
+          />
+        )}
+
+        {rotaSegura === 'rh-holerite-config' && isGestor && (
+          <ConfiguracaoHoleriteView
+            colaboradorAtual={colaboradorAtual}
+            colaboradores={colaboradores}
+            unidadeAtiva={unidadeAtiva}
+            pontos={pontos}
+            jornadas={jornadas}
+            ajustes={ajustes}
+            feriados={feriados}
+            atestados={atestados}
+            config={config}
+            holeritesConfigurados={holeritesConfigurados}
+            onSalvarHoleriteConfigurado={handleSalvarHoleriteConfigurado}
           />
         )}
 

@@ -219,6 +219,25 @@ CREATE TABLE IF NOT EXISTS public.avisos_empresa (
   autor_nome TEXT NOT NULL
 );
 
+-- 12. Holerites Configurados pelo RH (Recebíveis, Descontáveis e Liberação)
+CREATE TABLE IF NOT EXISTS public.holerites_configurados (
+  id TEXT PRIMARY KEY,
+  colaborador_id TEXT NOT NULL REFERENCES public.colaboradores(id) ON DELETE CASCADE,
+  mes TEXT NOT NULL,
+  recebiveis JSONB NOT NULL DEFAULT '[]'::jsonb,
+  descontaveis JSONB NOT NULL DEFAULT '[]'::jsonb,
+  total_recebiveis NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+  total_descontaveis NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+  salario_liquido NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+  liberado BOOLEAN NOT NULL DEFAULT false,
+  configurado_por TEXT,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (colaborador_id, mes)
+);
+
+CREATE INDEX IF NOT EXISTS idx_holerites_configurados_colab_mes
+  ON public.holerites_configurados (colaborador_id, mes);
+
 -- ============================================================================
 -- Permissões de Leitura e Escrita (Sem bloqueio de RLS para funcionamento imediato)
 -- ============================================================================
@@ -233,6 +252,7 @@ ALTER TABLE public.ajustes_escala DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feriados DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fechamentos_mensais DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.avisos_empresa DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.holerites_configurados DISABLE ROW LEVEL SECURITY;
 
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
@@ -255,7 +275,8 @@ DECLARE
     'ajustes_escala',
     'feriados',
     'fechamentos_mensais',
-    'avisos_empresa'
+    'avisos_empresa',
+    'holerites_configurados'
   ];
 BEGIN
   FOREACH tbl IN ARRAY tabelas LOOP

@@ -26,6 +26,7 @@ import {
   ConfiguracaoEmpresa,
   FechamentoMensal,
   Feriado,
+  HoleriteConfigurado,
   JornadaTemplate,
   RegistroPonto,
   StatusAtestado,
@@ -57,6 +58,7 @@ interface RHCommonProps {
   atestados: Atestado[];
   fechamentos: FechamentoMensal[];
   config: ConfiguracaoEmpresa;
+  holeritesConfigurados?: HoleriteConfigurado[];
 }
 
 interface FechamentoViewProps extends RHCommonProps {
@@ -941,6 +943,7 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
   feriados,
   atestados,
   config,
+  holeritesConfigurados = [],
 }) => {
   const [mes, setMes] = useState(getCurrentMonthStr);
   const ativos = useMemo(() => colaboradores.filter((c) => c.ativo), [colaboradores]);
@@ -1198,6 +1201,9 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
             mes={mes}
             resumo={itemPreview.resumo}
             holerite={itemPreview.holerite}
+            holeriteConfigurado={holeritesConfigurados.find(
+              (h) => h.colaboradorId === itemPreview.colaborador.id && h.mes === mes
+            )}
             config={config}
           />
         </div>

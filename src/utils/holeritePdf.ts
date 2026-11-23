@@ -3,6 +3,7 @@ import {
   Colaborador,
   ConfiguracaoEmpresa,
   HoleriteCalculado,
+  HoleriteConfigurado,
   ResumoMensalColaborador,
   Unidade,
   getDadosEmpresaUnidade,
@@ -57,6 +58,7 @@ export interface GerarHoleritePdfParams {
   mes: string;
   resumo: ResumoMensalColaborador;
   holerite: HoleriteCalculado;
+  holeriteConfigurado?: HoleriteConfigurado;
   config: ConfiguracaoEmpresa;
 }
 
@@ -66,6 +68,7 @@ export function gerarHoleritePDF({
   mes,
   resumo,
   holerite,
+  holeriteConfigurado,
   config,
 }: GerarHoleritePdfParams): string {
   const doc = new jsPDF({
@@ -99,8 +102,36 @@ export function gerarHoleritePDF({
     .join(' · ');
 
   const competenciaLabel = formatCompetenciaExtenso(mes);
-  const fgtsMes = Number((holerite.baseInss * 0.08).toFixed(2));
-  const baseIrrf = Math.max(0, Number((holerite.baseInss - holerite.inssValor).toFixed(2)));
+
+  const recSelecionados = holeriteConfigurado
+    ? holeriteConfigurado.recebiveis.filter((r) => r.selecionado)
+    : [];
+  const descSelecionados = holeriteConfigurado
+    ? holeriteConfigurado.descontaveis.filter((d) => d.selecionado)
+    : [];
+
+  const totalVencimentos = holeriteConfigurado
+    ? holeriteConfigurado.totalRecebiveis
+    : holerite.totalProventos;
+  const totalDescontosFinal = holeriteConfigurado
+    ? holeriteConfigurado.totalDescontaveis
+    : holerite.totalDescontos;
+  const salarioLiquidoFinal = holeriteConfigurado
+    ? holeriteConfigurado.salarioLiquido
+    : holerite.salarioLiquido;
+
+  const atrasosConfig = holeriteConfigurado
+    ? descSelecionados.find((d) => d.id === 'atrasos')?.valor || 0
+    : holerite.descontoAtrasos;
+  const baseInssFinal = holeriteConfigurado
+    ? Math.max(0, Number((totalVencimentos - atrasosConfig).toFixed(2)))
+    : holerite.baseInss;
+  const inssFinal = holeriteConfigurado
+    ? descSelecionados.find((d) => d.id === 'inss')?.valor || 0
+    : holerite.inssValor;
+
+  const fgtsMes = Number((baseInssFinal * 0.08).toFixed(2));
+  const baseIrrf = Math.max(0, Number((baseInssFinal - inssFinal).toFixed(2)));
 
   // -------------------------------------------------------------------------
   // 1. Cabeçalho Superior do Demonstrativo
@@ -268,76 +299,93 @@ export function gerarHoleritePDF({
     desconto?: string;
   }
 
-  const linhas: LinhaTabela[] = [
-    {
+  const linhas: LinhaTabela[] = [];
+
+  if (holeriteConfigurado) {
+    for (const item of recSelecionados) {
+      linhas.push({
+        descricao: item.descricao,
+        ref: item.referencia || '-',
+        vencimento: formatBRL(item.valor),
+      });
+    }
+    for (const item of descSelecionados) {
+      linhas.push({
+        descricao: item.descricao,
+        ref: item.referencia || '-',
+        desconto: formatBRL(item.valor),
+      });
+    }
+  } else {
+    linhas.push({
       descricao: 'Salário Base',
       ref: '30d',
       vencimento: formatBRL(holerite.salarioBase),
-    },
-  ];
+    });
 
-  if (holerite.valorExtra50 > 0) {
+    if (holerite.valorExtra50 > 0) {
+      linhas.push({
+        descricao: 'Horas Extras +50%',
+        ref: formatMinutesToHHMM(resumo.totalMinExtra50),
+        vencimento: formatBRL(holerite.valorExtra50),
+      });
+    }
+    if (holerite.valorExtra65 > 0) {
+      linhas.push({
+        descricao: 'Horas Extras +65%',
+        ref: formatMinutesToHHMM(resumo.totalMinExtra65),
+        vencimento: formatBRL(holerite.valorExtra65),
+      });
+    }
+    if (holerite.valorExtra70 > 0) {
+      linhas.push({
+        descricao: 'Horas Extras +70%',
+        ref: formatMinutesToHHMM(resumo.totalMinExtra70),
+        vencimento: formatBRL(holerite.valorExtra70),
+      });
+    }
+    if (holerite.valorExtra100 > 0) {
+      linhas.push({
+        descricao: 'Domingos / Feriados +100%',
+        ref: formatMinutesToHHMM(resumo.totalMinExtra100),
+        vencimento: formatBRL(holerite.valorExtra100),
+      });
+    }
+    if (holerite.valorAdicionalNoturno > 0) {
+      linhas.push({
+        descricao: 'Adicional Noturno',
+        ref: formatMinutesToHHMM(resumo.totalMinNoturnos),
+        vencimento: formatBRL(holerite.valorAdicionalNoturno),
+      });
+    }
+
     linhas.push({
-      descricao: 'Horas Extras +50%',
-      ref: formatMinutesToHHMM(resumo.totalMinExtra50),
-      vencimento: formatBRL(holerite.valorExtra50),
+      descricao: 'DSR sobre Horas Extras',
+      ref: `${resumo.domingosFeriadosMes}d`,
+      vencimento: formatBRL(holerite.dsrSobreExtras),
+    });
+
+    linhas.push({
+      descricao: 'Atrasos (>10 min/dia)',
+      ref: formatMinutesToHHMM(resumo.totalMinAtraso),
+      desconto: formatBRL(holerite.descontoAtrasos),
+    });
+
+    linhas.push({
+      descricao: 'INSS 2026',
+      ref: `${holerite.inssAliquotaEfetiva.toFixed(1).replace('.', ',')}%`,
+      desconto: formatBRL(holerite.inssValor),
+    });
+
+    linhas.push({
+      descricao:
+        colaborador.vtDiario > 0
+          ? 'Vale-Transporte (6%)'
+          : 'Vale-Transporte (Não optante)',
+      ref: colaborador.vtDiario > 0 ? '6%' : '0%',
+      desconto: formatBRL(holerite.descontoVt6Pct),
     });
   }
-  if (holerite.valorExtra65 > 0) {
-    linhas.push({
-      descricao: 'Horas Extras +65%',
-      ref: formatMinutesToHHMM(resumo.totalMinExtra65),
-      vencimento: formatBRL(holerite.valorExtra65),
-    });
-  }
-  if (holerite.valorExtra70 > 0) {
-    linhas.push({
-      descricao: 'Horas Extras +70%',
-      ref: formatMinutesToHHMM(resumo.totalMinExtra70),
-      vencimento: formatBRL(holerite.valorExtra70),
-    });
-  }
-  if (holerite.valorExtra100 > 0) {
-    linhas.push({
-      descricao: 'Domingos / Feriados +100%',
-      ref: formatMinutesToHHMM(resumo.totalMinExtra100),
-      vencimento: formatBRL(holerite.valorExtra100),
-    });
-  }
-  if (holerite.valorAdicionalNoturno > 0) {
-    linhas.push({
-      descricao: 'Adicional Noturno',
-      ref: formatMinutesToHHMM(resumo.totalMinNoturnos),
-      vencimento: formatBRL(holerite.valorAdicionalNoturno),
-    });
-  }
-
-  linhas.push({
-    descricao: 'DSR sobre Horas Extras',
-    ref: `${resumo.domingosFeriadosMes}d`,
-    vencimento: formatBRL(holerite.dsrSobreExtras),
-  });
-
-  linhas.push({
-    descricao: 'Atrasos (>10 min/dia)',
-    ref: formatMinutesToHHMM(resumo.totalMinAtraso),
-    desconto: formatBRL(holerite.descontoAtrasos),
-  });
-
-  linhas.push({
-    descricao: 'INSS 2026',
-    ref: `${holerite.inssAliquotaEfetiva.toFixed(1).replace('.', ',')}%`,
-    desconto: formatBRL(holerite.inssValor),
-  });
-
-  linhas.push({
-    descricao:
-      colaborador.vtDiario > 0
-        ? 'Vale-Transporte (6%)'
-        : 'Vale-Transporte (Não optante)',
-    ref: colaborador.vtDiario > 0 ? '6%' : '0%',
-    desconto: formatBRL(holerite.descontoVt6Pct),
-  });
 
   const rowH = 6.5;
   doc.setFont('helvetica', 'normal');
@@ -370,8 +418,8 @@ export function gerarHoleritePDF({
   doc.setFontSize(8.5);
   doc.setTextColor(17, 24, 39);
   doc.text('TOTAIS (VENCIMENTOS / DESCONTOS)', colDescX, y + 5);
-  doc.text(formatBRL(holerite.totalProventos), colVencX, y + 5, { align: 'right' });
-  doc.text(formatBRL(holerite.totalDescontos), colDescValX, y + 5, { align: 'right' });
+  doc.text(formatBRL(totalVencimentos), colVencX, y + 5, { align: 'right' });
+  doc.text(formatBRL(totalDescontosFinal), colDescValX, y + 5, { align: 'right' });
   y += 7.5;
 
   // Linha Destaque Salário Líquido
@@ -383,7 +431,7 @@ export function gerarHoleritePDF({
   doc.setTextColor(17, 24, 39);
   doc.text('SALÁRIO LÍQUIDO A RECEBER', colDescX, y + 6.2);
   doc.setFontSize(10.5);
-  doc.text(formatBRL(holerite.salarioLiquido), colDescValX, y + 6.2, { align: 'right' });
+  doc.text(formatBRL(salarioLiquidoFinal), colDescValX, y + 6.2, { align: 'right' });
   y += 13;
 
   // -------------------------------------------------------------------------
@@ -413,8 +461,8 @@ export function gerarHoleritePDF({
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(17, 24, 39);
-  doc.text(formatBRL(holerite.baseInss), margin + 3, by);
-  doc.text(formatBRL(holerite.baseInss), margin + 48, by);
+  doc.text(formatBRL(baseInssFinal), margin + 3, by);
+  doc.text(formatBRL(baseInssFinal), margin + 48, by);
   doc.text(formatBRL(fgtsMes), margin + 93, by);
   doc.text(formatBRL(baseIrrf), margin + 138, by);
 

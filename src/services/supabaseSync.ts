@@ -8,10 +8,12 @@ import {
   FechamentoMensal,
   Feriado,
   GradeSemanal,
+  HoleriteConfigurado,
   JornadaTemplate,
   LocalizacaoUnidade,
   Lotacao,
   RegistroPonto,
+  RubricaHoleriteItem,
   StatusAtestado,
   Unidade,
   cloneGradeSemanal,
@@ -28,6 +30,7 @@ export interface CloudSnapshot {
   feriados: Feriado[];
   jornadas: JornadaTemplate[];
   avisos: AvisoEmpresa[];
+  holeritesConfigurados: HoleriteConfigurado[];
   config: ConfiguracaoEmpresa;
 }
 
@@ -397,6 +400,62 @@ function avisoToRow(a: AvisoEmpresa) {
   };
 }
 
+function parseRubricas(raw: unknown): RubricaHoleriteItem[] {
+  let arr: unknown[] = [];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch {
+      arr = [];
+    }
+  } else if (Array.isArray(raw)) {
+    arr = raw;
+  }
+  return arr
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    .map((item, idx) => ({
+      id: String(item.id || `rubrica-${idx}`),
+      descricao: String(item.descricao || ''),
+      referencia: item.referencia ? String(item.referencia) : undefined,
+      valor: Number(item.valor ?? 0),
+      selecionado: Boolean(item.selecionado ?? true),
+      custom: Boolean(item.custom ?? false),
+    }));
+}
+
+function rowToHoleriteConfigurado(r: Record<string, any>): HoleriteConfigurado {
+  return {
+    id: String(r.id),
+    colaboradorId: String(r.colaborador_id),
+    mes: String(r.mes),
+    recebiveis: parseRubricas(r.recebiveis),
+    descontaveis: parseRubricas(r.descontaveis),
+    totalRecebiveis: Number(r.total_recebiveis ?? 0),
+    totalDescontaveis: Number(r.total_descontaveis ?? 0),
+    salarioLiquido: Number(r.salario_liquido ?? 0),
+    liberado: Boolean(r.liberado ?? false),
+    configuradoPor: r.configurado_por ? String(r.configurado_por) : undefined,
+    atualizadoEm: String(r.atualizado_em || new Date().toISOString()),
+  };
+}
+
+function holeriteConfiguradoToRow(h: HoleriteConfigurado) {
+  return {
+    id: h.id,
+    colaborador_id: h.colaboradorId,
+    mes: h.mes,
+    recebiveis: h.recebiveis,
+    descontaveis: h.descontaveis,
+    total_recebiveis: h.totalRecebiveis,
+    total_descontaveis: h.totalDescontaveis,
+    salario_liquido: h.salarioLiquido,
+    liberado: h.liberado,
+    configurado_por: h.configuradoPor ?? null,
+    atualizado_em: h.atualizadoEm || new Date().toISOString(),
+  };
+}
+
 // ============================================================================
 // Leitura Inicial Direta do Supabase (select('*'))
 // ============================================================================
@@ -411,6 +470,7 @@ export async function fetchAllCloudData(): Promise<CloudFetchResult> {
     feriados: [],
     jornadas: DEFAULT_JORNADAS,
     avisos: [],
+    holeritesConfigurados: [],
     config: DEFAULT_CONFIG,
   };
 
@@ -427,6 +487,7 @@ export async function fetchAllCloudData(): Promise<CloudFetchResult> {
       configRes,
       empresasRes,
       locRes,
+      holeritesRes,
     ] = await Promise.all([
       supabase.from('colaboradores').select('*').order('criado_em', { ascending: true }),
       supabase.from('registros_ponto').select('*').order('timestamp', { ascending: true }),
@@ -439,6 +500,7 @@ export async function fetchAllCloudData(): Promise<CloudFetchResult> {
       supabase.from('configuracoes_sistema').select('*'),
       supabase.from('empresas_unidades').select('*'),
       supabase.from('localizacoes_gps').select('*'),
+      supabase.from('holerites_configurados').select('*').order('atualizado_em', { ascending: false }),
     ]);
 
     const erros: string[] = [];
@@ -477,6 +539,12 @@ export async function fetchAllCloudData(): Promise<CloudFetchResult> {
       erros.push(formatSupabaseError(avisosRes.error, 'Leitura de avisos'));
     } else if (Array.isArray(avisosRes.data)) {
       snapshot.avisos = avisosRes.data.map(rowToAviso);
+    }
+
+    if (holeritesRes.error) {
+      erros.push(formatSupabaseError(holeritesRes.error, 'Leitura de holerites configurados'));
+    } else if (Array.isArray(holeritesRes.data)) {
+      snapshot.holeritesConfigurados = holeritesRes.data.map(rowToHoleriteConfigurado);
     }
 
     if (feriadosRes.error) {
@@ -780,6 +848,17 @@ export const cloudSync = {
       .insert(avisoToRow(aviso));
     throwIfError(error, 'Erro ao publicar aviso');
   },
+
+  async upsertHoleriteConfigurado(cfg: HoleriteConfigurado): Promise<HoleriteConfigurado> {
+    const row = holeriteConfiguradoToRow(cfg);
+    const { data, error } = await supabase
+      .from('holerites_configurados')
+      .upsert(row, { onConflict: 'colaborador_id,mes' })
+      .select('*')
+      .single();
+    throwIfError(error, 'Erro ao salvar configuração do holerite');
+    return data ? rowToHoleriteConfigurado(data as Record<string, any>) : cfg;
+  },
 };
 
 // ============================================================================
@@ -850,6 +929,11 @@ export function subscribeCloudRealtime(onRemoteChange: () => void): () => void {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'jornadas_template' },
+      triggerDebounced
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'holerites_configurados' },
       triggerDebounced
     )
     .subscribe();
