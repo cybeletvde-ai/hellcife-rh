@@ -470,8 +470,11 @@ export function gerarHoleritePDF({
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(55, 65, 81);
+  const diasBeneficiosMes = resumo.dias.filter(
+    (d) => d.status !== 'anterior_admissao' && d.minutosPrevistos > 0
+  ).length;
   doc.text(
-    `Benefícios Externos (${resumo.diasTrabalhados} dias trabalhados):`,
+    `Benefícios Externos (${diasBeneficiosMes} dias previstos na escala):`,
     margin + 3,
     by
   );

@@ -37,6 +37,7 @@ import {
 } from '../../types/rh';
 import {
   calcularEspelhoMensal,
+  calcularFatorProporcionalAdmissao,
   calcularHoleriteMensal,
   calcularRetribuicaoSimplesNacional,
   formatBRL,
@@ -965,14 +966,31 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
         unid
       );
       const holerite = calcularHoleriteMensal(c, resumo, jornada, config);
-      const retribuicao = calcularRetribuicaoSimplesNacional(c, holerite);
+      const configHolerite = holeritesConfigurados.find(
+        (h) => h.colaboradorId === c.id && h.mes === mes
+      );
+      const retribuicao = calcularRetribuicaoSimplesNacional(c, holerite, configHolerite);
+      const fatorAdmissao = calcularFatorProporcionalAdmissao(c.dataAdmissao, mes);
       return {
         ...retribuicao,
         resumo,
         holerite,
+        configHolerite,
+        fatorAdmissao,
       };
     });
-  }, [ativos, jornadas, unidadeAtiva, mes, pontos, ajustes, feriados, atestados, config]);
+  }, [
+    ativos,
+    jornadas,
+    unidadeAtiva,
+    mes,
+    pontos,
+    ajustes,
+    feriados,
+    atestados,
+    config,
+    holeritesConfigurados,
+  ]);
 
   const totais = useMemo(() => {
     return itens.reduce(
@@ -1016,7 +1034,7 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
             Regime: Simples Nacional (Isento de INSS Patronal 20%)
           </div>
           <div className="text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Inclui FGTS (8%), Provisão de Férias (1/12), 1/3 Férias, 13º Salário (1/12), FGTS sobre provisões e benefícios líquidos.
+            Inclui FGTS (8%), Provisão de Férias (1/12), 1/3 Férias, 13º Salário (1/12), FGTS sobre provisões e benefícios líquidos. Considera o Holerite Configurado quando salvo ou 100% do Salário Base do cadastro (proporcional apenas no mês de admissão).
           </div>
         </div>
 
@@ -1077,11 +1095,21 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
                     {formatBRL(it.custoTotalEmpresa)}
                   </span>
                 </div>
+                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mb-0.5">
+                  {it.configHolerite
+                    ? 'Base: Configuração do Holerite'
+                    : it.fatorAdmissao > 0 && it.fatorAdmissao < 1
+                      ? `Base: Salário proporcional (${Math.round(it.fatorAdmissao * 100)}% · admissão)`
+                      : it.fatorAdmissao === 0
+                        ? 'Admissão posterior à competência'
+                        : 'Base: Salário Base integral'}
+                </div>
                 <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-wrap gap-x-2">
                   <span>Bruto: {formatBRL(it.remuneracaoBruta)}</span>
                   <span>· FGTS: {formatBRL(it.fgts8Pct)}</span>
                   <span>· Férias+1/3: {formatBRL(it.provisaoFerias1_12 + it.provisaoTercoFerias)}</span>
                   <span>· 13º: {formatBRL(it.provisaoDecimoTerceiro1_12)}</span>
+                  <span>· Benef.: {formatBRL(it.beneficiosExternos)}</span>
                 </div>
                 <button
                   type="button"
@@ -1129,7 +1157,16 @@ export const RetribuicaoView: React.FC<RHCommonProps> = ({
                     <td className="py-2 pr-3 font-bold">
                       <div>{it.colaborador.nome}</div>
                       <div className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400">
-                        {it.colaborador.funcao} · {it.colaborador.lotacao}
+                        {it.colaborador.funcao} · {it.colaborador.lotacao} ·{' '}
+                        <span className="text-[10px]">
+                          {it.configHolerite
+                            ? 'Holerite Configurado'
+                            : it.fatorAdmissao > 0 && it.fatorAdmissao < 1
+                              ? `Proporcional (${Math.round(it.fatorAdmissao * 100)}%)`
+                              : it.fatorAdmissao === 0
+                                ? 'Admissão posterior'
+                                : 'Integral'}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2 px-2 text-right font-mono tabular-nums">

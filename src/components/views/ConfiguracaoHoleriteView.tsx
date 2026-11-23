@@ -782,38 +782,40 @@ export const ConfiguracaoHoleriteView: React.FC<ConfiguracaoHoleriteViewProps> =
               </div>
             </div>
 
-            {/* Toggle Liberar visualização para o Colaborador */}
-            <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-xs font-bold">
-                  Liberar visualização para o Colaborador
-                </div>
-                <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  {liberado
-                    ? 'Ativo: o colaborador já pode visualizar o holerite e baixar o PDF oficial.'
-                    : 'Desativado: o colaborador verá "Holerite desta competência em processamento pelo RH".'}
+            {/* Caixa de permissão: Liberar visualização para o Colaborador */}
+            <label className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-3 cursor-pointer">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <input
+                  type="checkbox"
+                  checked={liberado}
+                  onChange={(e) => {
+                    setLiberado(e.target.checked);
+                    setFeedback(null);
+                  }}
+                  className="mt-0.5 w-4 h-4 accent-emerald-600 rounded cursor-pointer shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold">
+                    Liberar visualização para o Colaborador
+                  </div>
+                  <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {liberado
+                      ? 'Marcado: após salvar, o colaborador poderá visualizar os valores e baixar o PDF oficial.'
+                      : 'Desmarcado: o colaborador verá apenas "Holerite em processamento pelo RH. Aguarde a liberação pela gestão.".'}
+                  </div>
                 </div>
               </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={liberado}
-                onClick={() => {
-                  setLiberado((v) => !v);
-                  setFeedback(null);
-                }}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-                  liberado ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-700'
+              <span
+                className={`text-[10px] font-bold uppercase px-2 py-1 rounded-md shrink-0 ${
+                  liberado
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
                 }`}
               >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ${
-                    liberado ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
+                {liberado ? 'Liberado' : 'Oculto'}
+              </span>
+            </label>
 
             {feedback && (
               <div

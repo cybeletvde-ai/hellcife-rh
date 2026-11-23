@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Clock, Receipt } from 'lucide-react';
 import {
   AjusteEscala,
@@ -16,6 +16,7 @@ import {
   calcularHoleriteMensal,
   getCurrentMonthStr,
 } from '../../utils/cltCalculations';
+import { cloudSync } from '../../services/supabaseSync';
 import { DemonstrativoHoleriteCard } from '../DemonstrativoHoleriteCard';
 
 interface HoleriteViewProps {
@@ -42,6 +43,40 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
   holeritesConfigurados,
 }) => {
   const [mes, setMes] = useState(getCurrentMonthStr);
+  const [configNuvem, setConfigNuvem] = useState<HoleriteConfigurado | null | undefined>(
+    undefined
+  );
+
+  const configSnapshot = useMemo(
+    () =>
+      holeritesConfigurados.find(
+        (h) => h.colaboradorId === colaborador.id && h.mes === mes
+      ) || null,
+    [holeritesConfigurados, colaborador.id, mes]
+  );
+
+  // Consulta direta e obrigatória à tabela holerites_configurados ao abrir a aba ou alterar mês/ano
+  useEffect(() => {
+    let ativo = true;
+    setConfigNuvem(undefined);
+
+    cloudSync
+      .getHoleriteConfigurado(colaborador.id, mes)
+      .then((res) => {
+        if (ativo) {
+          setConfigNuvem(res);
+        }
+      })
+      .catch(() => {
+        if (ativo) {
+          setConfigNuvem(configSnapshot);
+        }
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [colaborador.id, mes, configSnapshot?.atualizadoEm, configSnapshot?.liberado]);
 
   const resumo = useMemo(
     () =>
@@ -64,15 +99,9 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
     [colaborador, resumo, jornada, config]
   );
 
-  const configSalva = useMemo(
-    () =>
-      holeritesConfigurados.find(
-        (h) => h.colaboradorId === colaborador.id && h.mes === mes
-      ) || null,
-    [holeritesConfigurados, colaborador.id, mes]
-  );
-
-  const holeriteLiberado = Boolean(configSalva && configSalva.liberado);
+  const verificandoLiberacao = configNuvem === undefined;
+  const configEfetiva = configNuvem === undefined ? null : configNuvem;
+  const holeriteLiberado = Boolean(configEfetiva && configEfetiva.liberado === true);
 
   return (
     <div className="space-y-3">
@@ -91,26 +120,40 @@ export const HoleriteView: React.FC<HoleriteViewProps> = ({
         </div>
       </section>
 
-      {holeriteLiberado && configSalva ? (
+      {verificandoLiberacao ? (
+        <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-6 shadow-sm border border-zinc-200/80 dark:border-zinc-800 text-center space-y-2.5">
+          <div className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
+            <Clock className="w-5 h-5 animate-pulse" />
+          </div>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            Consultando liberação do holerite...
+          </p>
+        </section>
+      ) : holeriteLiberado && configEfetiva ? (
         <DemonstrativoHoleriteCard
           colaborador={colaborador}
           unidadeAtiva={unidadeAtiva}
           mes={mes}
           resumo={resumo}
           holerite={holerite}
-          holeriteConfigurado={configSalva}
+          holeriteConfigurado={configEfetiva}
+          exigirLiberacao={true}
           config={config}
         />
       ) : (
-        <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-6 shadow-sm border border-zinc-200/80 dark:border-zinc-800 text-center space-y-2.5">
-          <div className="w-11 h-11 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center mx-auto text-[#DC2626]">
+        <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-6 sm:p-8 shadow-sm border border-zinc-200/80 dark:border-zinc-800 text-center flex flex-col items-center justify-center space-y-2.5">
+          <div className="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-[#DC2626]">
             <Clock className="w-5 h-5" />
           </div>
-          <h2 className="text-sm font-bold text-[#111827] dark:text-white">
-            Holerite desta competência em processamento pelo RH
+          <h2 className="text-sm font-bold text-[#111827] dark:text-white max-w-sm">
+            Holerite em processamento pelo RH. Aguarde a liberação pela gestão.
           </h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto leading-relaxed">
-            O demonstrativo referente a <strong className="font-mono">{mes.split('-').reverse().join('/')}</strong> será exibido aqui com download em PDF assim que for conferido e liberado pelo RH.
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm leading-relaxed">
+            Competência{' '}
+            <strong className="font-mono text-[#111827] dark:text-zinc-200">
+              {mes.split('-').reverse().join('/')}
+            </strong>
+            . Os valores e o download em PDF serão exibidos assim que o RH marcar a liberação.
           </p>
         </section>
       )}

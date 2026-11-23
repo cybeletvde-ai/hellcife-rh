@@ -7,6 +7,7 @@ import {
   FaixaINSSDetalhe,
   Feriado,
   HoleriteCalculado,
+  HoleriteConfigurado,
   JornadaTemplate,
   RegistroPonto,
   ResumoMensalColaborador,
@@ -551,8 +552,11 @@ export function calcularHoleriteMensal(
 
   const vaDiarioEfetivo = Math.max(0, Number(colab.vaDiario) || 0);
   const vtDiarioEfetivo = Math.max(0, Number(colab.vtDiario) || 0);
-  const beneficioVaMes = Number((resumo.diasTrabalhados * vaDiarioEfetivo).toFixed(2));
-  const beneficioVtMes = Number((resumo.diasTrabalhados * vtDiarioEfetivo).toFixed(2));
+  const diasBeneficiosMes = resumo.dias.filter(
+    (d) => d.status !== 'anterior_admissao' && d.minutosPrevistos > 0
+  ).length;
+  const beneficioVaMes = Number((diasBeneficiosMes * vaDiarioEfetivo).toFixed(2));
+  const beneficioVtMes = Number((diasBeneficiosMes * vtDiarioEfetivo).toFixed(2));
 
   // Lei 7.418/85: Desconto VT até 6% do salário base, limitado ao valor concedido.
   // Se Vale-Transporte diário for 0,00, não aplica desconto de 6% no holerite/folha.
@@ -593,11 +597,64 @@ export function calcularHoleriteMensal(
   };
 }
 
+/**
+ * Calcula o fator de proporcionalidade mensal considerando apenas a data de admissão:
+ * - Admitido antes ou no 1º dia do mês selecionado: 1 (100% integral, sem corte por dias decorridos).
+ * - Admitido dentro do mês selecionado: proporcional aos dias corridos do mês a partir da admissão.
+ * - Admitido após o mês selecionado: 0.
+ */
+export function calcularFatorProporcionalAdmissao(
+  dataAdmissao: string | undefined,
+  mesYYYYMM: string
+): number {
+  const diasMes = getDaysInMonth(mesYYYYMM);
+  if (diasMes.length === 0) return 1;
+  const inicioMes = diasMes[0];
+  const fimMes = diasMes[diasMes.length - 1];
+
+  if (!dataAdmissao || dataAdmissao <= inicioMes) {
+    return 1;
+  }
+  if (dataAdmissao > fimMes) {
+    return 0;
+  }
+  const diasAtivos = diasMes.filter((d) => d >= dataAdmissao).length;
+  return diasAtivos / diasMes.length;
+}
+
 export function calcularRetribuicaoSimplesNacional(
   colab: Colaborador,
-  holerite: HoleriteCalculado
+  holerite: HoleriteCalculado,
+  holeriteConfigurado?: HoleriteConfigurado
 ): RetribuicaoEmpresa {
-  const remuneracaoBruta = holerite.baseInss; // proventos líquidos de atrasos
+  const fatorAdmissao = calcularFatorProporcionalAdmissao(colab.dataAdmissao, holerite.mes);
+
+  const diasPrevistosMes = holerite.resumo.dias.filter(
+    (d) => d.status !== 'anterior_admissao' && d.minutosPrevistos > 0
+  ).length;
+
+  const vaDiarioEfetivo = Math.max(0, Number(colab.vaDiario) || 0);
+  const vtDiarioEfetivo = Math.max(0, Number(colab.vtDiario) || 0);
+  const beneficioVaMes = Number((diasPrevistosMes * vaDiarioEfetivo).toFixed(2));
+  const beneficioVtMes = Number((diasPrevistosMes * vtDiarioEfetivo).toFixed(2));
+
+  let remuneracaoBruta = 0;
+  let descontoVt = 0;
+
+  if (holeriteConfigurado) {
+    remuneracaoBruta = Number((Number(holeriteConfigurado.totalRecebiveis) || 0).toFixed(2));
+    const itemVt = holeriteConfigurado.descontaveis.find((d) => d.id === 'vt');
+    descontoVt = itemVt && itemVt.selecionado ? Math.max(0, Number(itemVt.valor) || 0) : 0;
+  } else {
+    const salarioCadastro = Math.max(0, Number(colab.salarioBase) || 0);
+    remuneracaoBruta = Number((salarioCadastro * fatorAdmissao).toFixed(2));
+    const vt6PctTeorico = Number((remuneracaoBruta * 0.06).toFixed(2));
+    descontoVt =
+      vtDiarioEfetivo > 0 && beneficioVtMes > 0
+        ? Math.min(vt6PctTeorico, beneficioVtMes)
+        : 0;
+  }
+
   const inssPatronal = 0; // Simples Nacional isento de 20% patronal
   const fgts8Pct = Number((remuneracaoBruta * 0.08).toFixed(2));
   const provisaoFerias1_12 = Number((remuneracaoBruta / 12).toFixed(2));
@@ -607,7 +664,7 @@ export function calcularRetribuicaoSimplesNacional(
     ((provisaoFerias1_12 + provisaoTercoFerias + provisaoDecimoTerceiro1_12) * 0.08).toFixed(2)
   );
   const beneficiosExternos = Number(
-    (holerite.beneficioVaMes + Math.max(0, holerite.beneficioVtMes - holerite.descontoVt6Pct)).toFixed(2)
+    (beneficioVaMes + Math.max(0, beneficioVtMes - descontoVt)).toFixed(2)
   );
 
   const custoTotalEmpresa = Number(

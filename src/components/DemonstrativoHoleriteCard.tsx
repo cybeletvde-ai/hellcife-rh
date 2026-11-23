@@ -46,6 +46,7 @@ interface DemonstrativoHoleriteCardProps {
   resumo: ResumoMensalColaborador;
   holerite: HoleriteCalculado;
   holeriteConfigurado?: HoleriteConfigurado;
+  exigirLiberacao?: boolean;
   config: ConfiguracaoEmpresa;
 }
 
@@ -56,6 +57,7 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
   resumo,
   holerite,
   holeriteConfigurado,
+  exigirLiberacao = false,
   config,
 }) => {
   const [mostrarFaixas, setMostrarFaixas] = useState(false);
@@ -118,7 +120,11 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
   const baseIrrf = Math.max(0, Number((baseInssFinal - inssFinal).toFixed(2)));
   const competenciaLabel = formatCompetenciaBR(mes);
 
+  const bloqueadoPorLiberacao =
+    exigirLiberacao && (!holeriteConfigurado || holeriteConfigurado.liberado !== true);
+
   const handleBaixarPdf = () => {
+    if (bloqueadoPorLiberacao) return;
     gerarHoleritePDF({
       colaborador,
       unidadeAtiva,
@@ -132,6 +138,10 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setPdfFeedback(null), 3500);
   };
+
+  if (bloqueadoPorLiberacao) {
+    return null;
+  }
 
   return (
     <div className="space-y-3">
@@ -554,7 +564,13 @@ export const DemonstrativoHoleriteCard: React.FC<DemonstrativoHoleriteCardProps>
         {/* Benefícios Externos */}
         <div className="mb-3">
           <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 print-text-muted">
-            Benefícios Externos ({resumo.diasTrabalhados} dias trabalhados)
+            Benefícios Externos (
+            {
+              resumo.dias.filter(
+                (d) => d.status !== 'anterior_admissao' && d.minutosPrevistos > 0
+              ).length
+            }{' '}
+            dias previstos na escala)
           </h3>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800 text-xs print-divide">
             <div className="py-1.5 flex justify-between">

@@ -434,7 +434,7 @@ function rowToHoleriteConfigurado(r: Record<string, any>): HoleriteConfigurado {
     totalRecebiveis: Number(r.total_recebiveis ?? 0),
     totalDescontaveis: Number(r.total_descontaveis ?? 0),
     salarioLiquido: Number(r.salario_liquido ?? 0),
-    liberado: Boolean(r.liberado ?? false),
+    liberado: r.liberado === true || r.liberado === 'true',
     configuradoPor: r.configurado_por ? String(r.configurado_por) : undefined,
     atualizadoEm: String(r.atualizado_em || new Date().toISOString()),
   };
@@ -847,6 +847,20 @@ export const cloudSync = {
       .from('avisos_empresa')
       .insert(avisoToRow(aviso));
     throwIfError(error, 'Erro ao publicar aviso');
+  },
+
+  async getHoleriteConfigurado(
+    colaboradorId: string,
+    mes: string
+  ): Promise<HoleriteConfigurado | null> {
+    const { data, error } = await supabase
+      .from('holerites_configurados')
+      .select('*')
+      .eq('colaborador_id', colaboradorId)
+      .eq('mes', mes)
+      .maybeSingle();
+    throwIfError(error, 'Erro ao consultar configuração do holerite');
+    return data ? rowToHoleriteConfigurado(data as Record<string, any>) : null;
   },
 
   async upsertHoleriteConfigurado(cfg: HoleriteConfigurado): Promise<HoleriteConfigurado> {
