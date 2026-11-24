@@ -13,6 +13,7 @@ export type MenuRoute =
   | 'holerite'
   | 'atestados'
   | 'informacoes'
+  | 'rh-ao-vivo'
   | 'rh-fechamento'
   | 'rh-relatorio'
   | 'rh-retribuicao'

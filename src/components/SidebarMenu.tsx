@@ -15,6 +15,7 @@ import {
   Moon,
   Paperclip,
   PieChart,
+  Radio,
   Receipt,
   SlidersHorizontal,
   Sun,
@@ -57,6 +58,7 @@ const SEC_COLABORADOR: MenuItem[] = [
 ];
 
 const SEC_RH: MenuItem[] = [
+  { id: 'rh-ao-vivo', label: 'Marcações do dia (Ao vivo)', icon: Radio },
   { id: 'rh-fechamento', label: 'Fechamento', icon: CheckSquare },
   { id: 'rh-relatorio', label: 'Relatório', icon: FileText },
   { id: 'rh-retribuicao', label: 'Retribuição', icon: PieChart },
@@ -120,7 +122,13 @@ const SidebarNavContent: React.FC<SidebarNavContentProps> = ({
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate flex-1">{item.label}</span>
+              {item.id === 'rh-ao-vivo' && (
+                <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+              )}
             </button>
           );
         })}

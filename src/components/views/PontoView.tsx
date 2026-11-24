@@ -24,6 +24,7 @@ import {
   TipoMarcacao,
   Unidade,
   getDadosEmpresaUnidade,
+  temPermissaoGestao,
 } from '../../types/rh';
 import { haversineDistanceMeters, sha256Hex } from '../../services/storage';
 import {
@@ -40,6 +41,7 @@ import {
   formatMinutesToHHMM,
 } from '../../utils/cltCalculations';
 import { SelfieCaptureModal } from '../SelfieCaptureModal';
+import { MarcacoesAoVivoPanel } from '../MarcacoesAoVivoPanel';
 
 interface PontoViewProps {
   colaborador: Colaborador;
@@ -51,6 +53,11 @@ interface PontoViewProps {
   atestados: Atestado[];
   config: ConfiguracaoEmpresa;
   onRegistrarPonto: (registro: RegistroPonto) => Promise<RegistroPonto | null>;
+  colaboradoresGestao?: Colaborador[];
+  jornadasGestao?: JornadaTemplate[];
+  onAtualizarPonto?: (registro: RegistroPonto) => Promise<boolean>;
+  onRemoverPonto?: (id: string) => Promise<boolean>;
+  onAdicionarAtestado?: (atestado: Atestado) => Promise<boolean>;
 }
 
 const ORDEM_MARCACOES: { tipo: TipoMarcacao; label: string }[] = [
@@ -70,7 +77,13 @@ export const PontoView: React.FC<PontoViewProps> = ({
   atestados,
   config,
   onRegistrarPonto,
+  colaboradoresGestao,
+  jornadasGestao,
+  onAtualizarPonto,
+  onRemoverPonto,
+  onAdicionarAtestado,
 }) => {
+  const isGestor = temPermissaoGestao(colaborador.funcao);
   const [serverClock, setServerClock] = useState(() => getEstimatedRecifeClock());
   const [gpsStatus, setGpsStatus] = useState<
     'verificando' | 'verificada' | 'fora_raio' | 'indisponivel'
@@ -471,6 +484,30 @@ export const PontoView: React.FC<PontoViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Painel Gerencial em Tempo Real (Exclusivo Administradora e Diretor) */}
+      {isGestor &&
+        colaboradoresGestao &&
+        jornadasGestao &&
+        onAtualizarPonto &&
+        onRemoverPonto &&
+        onAdicionarAtestado && (
+          <MarcacoesAoVivoPanel
+            colaboradorAtual={colaborador}
+            colaboradores={colaboradoresGestao}
+            unidadeAtiva={unidadeAtiva}
+            pontos={pontos}
+            jornadas={jornadasGestao}
+            ajustes={ajustes}
+            feriados={feriados}
+            atestados={atestados}
+            config={config}
+            onRegistrarPonto={onRegistrarPonto}
+            onAtualizarPonto={onAtualizarPonto}
+            onRemoverPonto={onRemoverPonto}
+            onAdicionarAtestado={onAdicionarAtestado}
+          />
+        )}
 
       {/* Linha do Tempo: Marcações de Hoje */}
       <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">

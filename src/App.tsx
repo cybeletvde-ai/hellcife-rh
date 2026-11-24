@@ -28,6 +28,7 @@ import { DesktopSidebar, SidebarMenu } from './components/SidebarMenu';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { BrandLogo } from './components/BrandLogo';
 import { SplashScreen } from './components/SplashScreen';
+import { MarcacoesAoVivoPanel } from './components/MarcacoesAoVivoPanel';
 import { PontoView } from './components/views/PontoView';
 import { EspelhoView } from './components/views/EspelhoView';
 import { EscalasView, JornadasView } from './components/views/JornadasEscalasView';
@@ -54,6 +55,7 @@ const ROTAS_VALIDAS: MenuRoute[] = [
   'holerite',
   'atestados',
   'informacoes',
+  'rh-ao-vivo',
   'rh-fechamento',
   'rh-relatorio',
   'rh-retribuicao',
@@ -317,6 +319,29 @@ export default function App() {
     }
   };
 
+  const handleAtualizarPonto = async (reg: RegistroPonto): Promise<boolean> => {
+    setErroBanco(null);
+    try {
+      const atualizado = await cloudSync.updatePonto(reg);
+      setPontos((prev) => prev.map((p) => (p.id === atualizado.id ? atualizado : p)));
+      return true;
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Erro desconhecido ao atualizar registo de ponto no Supabase.';
+      setErroBanco(msg);
+      return false;
+    }
+  };
+
+  const handleRemoverPonto = async (id: string): Promise<boolean> => {
+    const ok = await executarGravacao(() => cloudSync.deletePonto(id));
+    if (!ok) return false;
+    setPontos((prev) => prev.filter((p) => p.id !== id));
+    return true;
+  };
+
   const handleAdicionarAtestado = async (novo: Atestado): Promise<boolean> => {
     const ok = await executarGravacao(() => cloudSync.insertAtestado(novo));
     if (!ok) return false;
@@ -554,13 +579,30 @@ export default function App() {
           <PontoView
             colaborador={colaboradorAtual}
             unidadeAtiva={unidadeAtiva}
-            pontos={pontos}
+            pontos={
+              isGestor
+                ? pontos
+                : pontos.filter((p) => p.colaboradorId === colaboradorAtual.id)
+            }
             jornada={jornadaAtual}
-            ajustes={ajustes}
+            ajustes={
+              isGestor
+                ? ajustes
+                : ajustes.filter((a) => a.colaboradorId === colaboradorAtual.id)
+            }
             feriados={feriados}
-            atestados={atestados}
+            atestados={
+              isGestor
+                ? atestados
+                : atestados.filter((a) => a.colaboradorId === colaboradorAtual.id)
+            }
             config={config}
             onRegistrarPonto={handleRegistrarPonto}
+            colaboradoresGestao={isGestor ? colaboradores : undefined}
+            jornadasGestao={isGestor ? jornadas : undefined}
+            onAtualizarPonto={isGestor ? handleAtualizarPonto : undefined}
+            onRemoverPonto={isGestor ? handleRemoverPonto : undefined}
+            onAdicionarAtestado={isGestor ? handleAdicionarAtestado : undefined}
           />
         )}
 
@@ -650,6 +692,24 @@ export default function App() {
             unidadeAtiva={unidadeAtiva}
             avisos={avisos}
             onAdicionarAviso={handleAdicionarAviso}
+          />
+        )}
+
+        {rotaSegura === 'rh-ao-vivo' && isGestor && (
+          <MarcacoesAoVivoPanel
+            colaboradorAtual={colaboradorAtual}
+            colaboradores={colaboradores}
+            unidadeAtiva={unidadeAtiva}
+            pontos={pontos}
+            jornadas={jornadas}
+            ajustes={ajustes}
+            feriados={feriados}
+            atestados={atestados}
+            config={config}
+            onRegistrarPonto={handleRegistrarPonto}
+            onAtualizarPonto={handleAtualizarPonto}
+            onRemoverPonto={handleRemoverPonto}
+            onAdicionarAtestado={handleAdicionarAtestado}
           />
         )}
 

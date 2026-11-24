@@ -741,6 +741,37 @@ export const cloudSync = {
     return data ? rowToPonto(data as Record<string, any>) : reg;
   },
 
+  async updatePonto(reg: RegistroPonto): Promise<RegistroPonto> {
+    const row = pontoToRow(reg);
+    const { data, error } = await supabase
+      .from('registros_ponto')
+      .update({
+        unidade: row.unidade,
+        data: row.data,
+        hora: row.hora,
+        timestamp: row.timestamp,
+        tipo: row.tipo,
+        localizacao_verificada: row.localizacao_verificada,
+        registrado_por: row.registrado_por,
+        justificativa_deslocamento: row.justificativa_deslocamento,
+        origem_registro: row.origem_registro,
+        hash_comprovante: row.hash_comprovante,
+      })
+      .eq('id', reg.id)
+      .select('*')
+      .single();
+    throwIfError(error, 'Erro ao atualizar marcação de ponto');
+    return data ? rowToPonto(data as Record<string, any>) : reg;
+  },
+
+  async deletePonto(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('registros_ponto')
+      .delete()
+      .eq('id', id);
+    throwIfError(error, 'Erro ao remover marcação de ponto');
+  },
+
   async insertAtestado(atestado: Atestado): Promise<void> {
     const { error } = await supabase
       .from('atestados')
