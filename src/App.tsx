@@ -579,30 +579,13 @@ export default function App() {
           <PontoView
             colaborador={colaboradorAtual}
             unidadeAtiva={unidadeAtiva}
-            pontos={
-              isGestor
-                ? pontos
-                : pontos.filter((p) => p.colaboradorId === colaboradorAtual.id)
-            }
+            pontos={pontos.filter((p) => p.colaboradorId === colaboradorAtual.id)}
             jornada={jornadaAtual}
-            ajustes={
-              isGestor
-                ? ajustes
-                : ajustes.filter((a) => a.colaboradorId === colaboradorAtual.id)
-            }
+            ajustes={ajustes.filter((a) => a.colaboradorId === colaboradorAtual.id)}
             feriados={feriados}
-            atestados={
-              isGestor
-                ? atestados
-                : atestados.filter((a) => a.colaboradorId === colaboradorAtual.id)
-            }
+            atestados={atestados.filter((a) => a.colaboradorId === colaboradorAtual.id)}
             config={config}
             onRegistrarPonto={handleRegistrarPonto}
-            colaboradoresGestao={isGestor ? colaboradores : undefined}
-            jornadasGestao={isGestor ? jornadas : undefined}
-            onAtualizarPonto={isGestor ? handleAtualizarPonto : undefined}
-            onRemoverPonto={isGestor ? handleRemoverPonto : undefined}
-            onAdicionarAtestado={isGestor ? handleAdicionarAtestado : undefined}
           />
         )}
 

@@ -24,7 +24,6 @@ import {
   TipoMarcacao,
   Unidade,
   getDadosEmpresaUnidade,
-  temPermissaoGestao,
 } from '../../types/rh';
 import { haversineDistanceMeters, sha256Hex } from '../../services/storage';
 import {
@@ -41,7 +40,7 @@ import {
   formatMinutesToHHMM,
 } from '../../utils/cltCalculations';
 import { SelfieCaptureModal } from '../SelfieCaptureModal';
-import { MarcacoesAoVivoPanel } from '../MarcacoesAoVivoPanel';
+import { MapaIndividualColaboradorLeaflet } from '../MapaIndividualColaboradorLeaflet';
 
 interface PontoViewProps {
   colaborador: Colaborador;
@@ -53,18 +52,13 @@ interface PontoViewProps {
   atestados: Atestado[];
   config: ConfiguracaoEmpresa;
   onRegistrarPonto: (registro: RegistroPonto) => Promise<RegistroPonto | null>;
-  colaboradoresGestao?: Colaborador[];
-  jornadasGestao?: JornadaTemplate[];
-  onAtualizarPonto?: (registro: RegistroPonto) => Promise<boolean>;
-  onRemoverPonto?: (id: string) => Promise<boolean>;
-  onAdicionarAtestado?: (atestado: Atestado) => Promise<boolean>;
 }
 
-const ORDEM_MARCACOES: { tipo: TipoMarcacao; label: string }[] = [
-  { tipo: 'entrada', label: 'Entrada' },
-  { tipo: 'saida_almoco', label: 'Saída Almoço' },
-  { tipo: 'retorno_almoco', label: 'Retorno Almoço' },
-  { tipo: 'saida', label: 'Saída' },
+const ORDEM_MARCACOES: { tipo: TipoMarcacao; sigla: 'E1' | 'S1' | 'E2' | 'S2'; label: string }[] = [
+  { tipo: 'entrada', sigla: 'E1', label: 'Entrada' },
+  { tipo: 'saida_almoco', sigla: 'S1', label: 'Saída Almoço' },
+  { tipo: 'retorno_almoco', sigla: 'E2', label: 'Retorno Almoço' },
+  { tipo: 'saida', sigla: 'S2', label: 'Saída' },
 ];
 
 export const PontoView: React.FC<PontoViewProps> = ({
@@ -77,13 +71,13 @@ export const PontoView: React.FC<PontoViewProps> = ({
   atestados,
   config,
   onRegistrarPonto,
-  colaboradoresGestao,
-  jornadasGestao,
-  onAtualizarPonto,
-  onRemoverPonto,
-  onAdicionarAtestado,
 }) => {
-  const isGestor = temPermissaoGestao(colaborador.funcao);
+  const [selfieVisualizacao, setSelfieVisualizacao] = useState<{
+    label: string;
+    hora: string;
+    unidade: Unidade;
+    src: string;
+  } | null>(null);
   const [serverClock, setServerClock] = useState(() => getEstimatedRecifeClock());
   const [gpsStatus, setGpsStatus] = useState<
     'verificando' | 'verificada' | 'fora_raio' | 'indisponivel'
@@ -208,11 +202,32 @@ export const PontoView: React.FC<PontoViewProps> = ({
 
   useEffect(() => {
     void verificarGPS(true);
+    let watchId: number | null = null;
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          avaliarPosicaoGPS(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => {
+          // Fallback tratado pela checagem periódica verificarGPS
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 10000,
+        }
+      );
+    }
     const gpsPoll = setInterval(() => {
       void verificarGPS(false);
     }, 20000);
-    return () => clearInterval(gpsPoll);
-  }, [verificarGPS]);
+    return () => {
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      clearInterval(gpsPoll);
+    };
+  }, [verificarGPS, avaliarPosicaoGPS]);
 
   const hojeStr = serverClock.data;
   const mesAtual = serverClock.data.slice(0, 7);
@@ -485,50 +500,43 @@ export const PontoView: React.FC<PontoViewProps> = ({
         )}
       </section>
 
-      {/* Painel Gerencial em Tempo Real (Exclusivo Administradora e Diretor) */}
-      {isGestor &&
-        colaboradoresGestao &&
-        jornadasGestao &&
-        onAtualizarPonto &&
-        onRemoverPonto &&
-        onAdicionarAtestado && (
-          <MarcacoesAoVivoPanel
-            colaboradorAtual={colaborador}
-            colaboradores={colaboradoresGestao}
-            unidadeAtiva={unidadeAtiva}
-            pontos={pontos}
-            jornadas={jornadasGestao}
-            ajustes={ajustes}
-            feriados={feriados}
-            atestados={atestados}
-            config={config}
-            onRegistrarPonto={onRegistrarPonto}
-            onAtualizarPonto={onAtualizarPonto}
-            onRemoverPonto={onRemoverPonto}
-            onAdicionarAtestado={onAdicionarAtestado}
-          />
-        )}
-
-      {/* Linha do Tempo: Marcações de Hoje */}
-      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Marcações de Hoje
-          </h2>
+      {/* Visão Individual Exclusiva: Minhas Marcações e Localização Hoje */}
+      <section className="bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 rounded-xl p-3 md:p-4 shadow-sm border border-zinc-200/80 dark:border-zinc-800 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-xs sm:text-sm font-bold text-[#111827] dark:text-white truncate">
+              Minhas Marcações e Localização Hoje
+            </h2>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold shrink-0">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Ao vivo
+            </span>
+          </div>
           <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-            Portaria MTP 671/2021
+            {formatDateBR(hojeStr)} · Portaria MTP 671/2021
           </span>
         </div>
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {ORDEM_MARCACOES.map((item, idx) => {
+          {ORDEM_MARCACOES.map((item) => {
             const reg = mapaHoje[item.tipo];
             const isNext = proximaMarcacao?.tipo === item.tipo;
+            const statusReg = reg
+              ? reg.origemRegistro === 'manual_gestor'
+                ? 'Manual · Gestão'
+                : reg.localizacaoVerificada
+                  ? 'Confirmada'
+                  : 'Fora do local'
+              : null;
+
             return (
-              <div key={item.tipo} className="py-2 flex items-center justify-between gap-2">
+              <div key={item.tipo} className="py-2.5 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                       reg
                         ? 'bg-[#DC2626] text-white'
                         : isNext
@@ -536,24 +544,65 @@ export const PontoView: React.FC<PontoViewProps> = ({
                           : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
                     }`}
                   >
-                    {idx + 1}
+                    {item.sigla}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate">{item.label}</div>
-                    {reg && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-semibold truncate">{item.label}</span>
+                      {statusReg && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            statusReg === 'Confirmada'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                              : statusReg === 'Manual · Gestão'
+                                ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200'
+                                : 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300'
+                          }`}
+                        >
+                          {statusReg}
+                        </span>
+                      )}
+                    </div>
+                    {reg ? (
                       <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                         Loja {reg.unidade} ·{' '}
                         {reg.origemRegistro === 'manual_gestor'
                           ? `Lançado por ${reg.registradoPor || 'Gestão'}`
                           : reg.localizacaoVerificada
                             ? `GPS ${reg.distanciaMetros ?? 0}m`
-                            : 'GPS pendente'}
-                        {reg.selfieDataUrl ? ' · Selfie OK' : ''}
+                            : 'GPS fora do perímetro'}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {isNext ? 'Próxima marcação prevista' : 'Aguardando registro'}
                       </div>
                     )}
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2 shrink-0">
+                  {reg?.selfieDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelfieVisualizacao({
+                          label: `${item.sigla} · ${item.label}`,
+                          hora: reg.hora.slice(0, 5),
+                          unidade: reg.unidade,
+                          src: reg.selfieDataUrl!,
+                        })
+                      }
+                      className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:opacity-90 cursor-pointer shrink-0"
+                      title="Ver selfie capturada"
+                      aria-label={`Ver selfie de ${item.label}`}
+                    >
+                      <img
+                        src={reg.selfieDataUrl}
+                        alt={`Selfie ${item.label}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  )}
                   <span
                     className={`font-mono tabular-nums text-xs font-semibold ${
                       reg ? 'text-[#111827] dark:text-white' : 'text-zinc-400'
@@ -575,6 +624,16 @@ export const PontoView: React.FC<PontoViewProps> = ({
             );
           })}
         </div>
+
+        {/* Mapa Individual em Tempo Real (GPS atual + Loja(s) da lotação + Batidas próprias de hoje) */}
+        <MapaIndividualColaboradorLeaflet
+          colaborador={colaborador}
+          coords={coords}
+          gpsStatus={gpsStatus}
+          distanciaAtual={distancia}
+          pontosHoje={pontosHoje}
+          config={config}
+        />
       </section>
 
       {/* Grade responsiva dos 4 mini-cartões */}
@@ -789,6 +848,35 @@ export const PontoView: React.FC<PontoViewProps> = ({
                 Concluir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Visualização da Selfie Própria */}
+      {selfieVisualizacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3">
+          <div className="w-full max-w-[360px] rounded-xl bg-white dark:bg-[#1C1C20] text-[#111827] dark:text-zinc-100 p-4 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold truncate">{selfieVisualizacao.label}</h3>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {selfieVisualizacao.hora} · Loja {selfieVisualizacao.unidade}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelfieVisualizacao(null)}
+                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+                aria-label="Fechar selfie"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={selfieVisualizacao.src}
+              alt={selfieVisualizacao.label}
+              className="w-full aspect-square object-cover rounded-xl border border-zinc-200 dark:border-zinc-700"
+            />
           </div>
         </div>
       )}
